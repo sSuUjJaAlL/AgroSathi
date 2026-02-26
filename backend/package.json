@@ -16,8 +16,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@google/genai": "^1.42.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
     "axios": "^1.13.5",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
@@ -26,6 +28,7 @@
     "jsonwebtoken": "^9.0.3",
     "kleur": "^4.1.5",
     "mongoose": "^9.2.1",
+    "multer": "^2.0.2",
     "winston": "^3.19.0",
     "zod": "^4.3.6"
   }
