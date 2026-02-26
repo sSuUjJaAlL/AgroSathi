@@ -7,6 +7,6 @@ const authrouter=Router()
 
 authrouter.post('/signup', signupController);
 authrouter.post('/login', loginController)
-authrouter.post('/logout/', verifyAuthToken,logoutController);
+authrouter.post('/logout', verifyAuthToken,logoutController);
 
 export default authrouter
