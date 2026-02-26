@@ -4,6 +4,7 @@ import serverRouter from "./router/server.router";
 import connectToDatabase from "./database/connect";
 import { getenvvar } from "./utils/env.utils";
 import agrologger from "./libs/logger.libs";
+import seederResponse from "./libs/seeder";
 
 
 async function startExpress() {
@@ -13,6 +14,7 @@ async function startExpress() {
     await Promise.all([serverMiddleware(app), serverRouter(app)]);
     await connectToDatabase();
     agrologger.info("Database connected successfully");
+    await seederResponse();
     const port = Number(getenvvar("PORT"));
     app.listen(port, () => {
       agrologger.info(`App is running on port ${port}`);
