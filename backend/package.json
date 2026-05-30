@@ -1,0 +1,47 @@
+{
+  "name": "agri-price-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "seed": "tsx src/scripts/seedHistorical.ts",
+    "scrape-once": "tsx src/scripts/runScraperOnce.ts",
+    "import-csv": "tsx src/scripts/importCsv.ts",
+    "test:scrape": "tsx src/scripts/testKalimatiScrape.ts",
+    "pipeline:once": "tsx src/scripts/runPipelineOnce.ts",
+    "sync:weather": "tsx src/scripts/weatherSyncOnce.ts",
+    "import:kalimati-archive": "tsx src/scripts/importKalimatiGithubArchive.ts",
+    "backfill:weather": "tsx src/scripts/backfillWeather.ts",
+    "backfill:prices": "tsx src/scripts/backfillPrices.ts",
+    "migrate:atlas": "tsx src/scripts/migrateToAtlas.ts",
+    "seed:fuel": "tsx src/scripts/seedFuelPrices.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-async-errors": "^3.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.8.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^8.0.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.9.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

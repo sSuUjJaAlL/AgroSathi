@@ -1,0 +1,9 @@
+{
+  "name": "agri-price-nepal",
+  "private": true,
+  "scripts": {
+    "mongo:up": "docker compose up -d mongo",
+    "mongo:down": "docker compose stop mongo",
+    "mongo:logs": "docker compose logs -f mongo"
+  }
+}

@@ -1,0 +1,14 @@
+backend/tmp/
+node_modules/
+dist/
+.env
+*.pkl
+.DS_Store
+frontend/dist/
+ml-service/model/model.pkl
+__pycache__/
+*.pyc
+.venv/
+venv/
+.claude/
+*.log

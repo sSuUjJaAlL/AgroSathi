@@ -1,0 +1,14 @@
+# MongoDB Atlas is now the default database.
+# The local mongo service below is only needed for offline development.
+# To use it: uncomment the service and set MONGODB_URI=mongodb://localhost:27017/agri_price_nepal in backend/.env
+
+# services:
+#   mongo:
+#     image: mongo:7
+#     ports:
+#       - "27017:27017"
+#     volumes:
+#       - mongo_data:/data/db
+
+# volumes:
+#   mongo_data:
