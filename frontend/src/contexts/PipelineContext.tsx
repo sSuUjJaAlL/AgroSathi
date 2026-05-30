@@ -84,7 +84,8 @@ export function PipelineProvider({ children }: { children: React.ReactNode }) {
       }
 
       const start = Date.now();
-      const maxMs = 6 * 60 * 1000;
+      const maxMs = 10 * 60 * 1000;
+      const todayStr = new Date().toISOString().slice(0, 10);
 
       const inferPhase = (elapsed: number): PipelineModalPhase => {
         if (elapsed < 8000) return "preprocess";
@@ -103,7 +104,9 @@ export function PipelineProvider({ children }: { children: React.ReactNode }) {
           const points = seven?.points?.length ?? 0;
           const newBatch = seven?.batch_id ?? null;
           const batchChanged = newBatch != null && newBatch !== prevBatchId;
-          const ready = points > 0 && (prevBatchId === null || batchChanged);
+          const firstPointToday = seven?.points?.[0]?.target_date?.slice(0, 10) === todayStr ||
+            seven?.points?.[0]?.target_date?.slice(0, 10) > todayStr.slice(0, 10);
+          const ready = points > 0 && (prevBatchId === null || batchChanged || firstPointToday);
 
           if (ready) {
             const avg =
@@ -131,7 +134,7 @@ export function PipelineProvider({ children }: { children: React.ReactNode }) {
         setPipeUi((u) => ({
           ...u,
           phase: "error",
-          error: "No new forecast within 6 minutes. Check backend and ML service logs.",
+          error: "Pipeline still running in background. Today's forecast may appear shortly — refresh the dashboard.",
         }));
       }
       runningRef.current = false;

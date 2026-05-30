@@ -95,10 +95,11 @@ def load_raw_frames():
     return crops, weather, fuel
 
 
-def merge_feature_frame() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    cached = load_preprocessed_features()
-    if cached is not None:
-        return cached
+def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    if not force:
+        cached = load_preprocessed_features()
+        if cached is not None:
+            return cached
 
     crops, weather, fuel = load_raw_frames()
     meta: dict = {"imputed_cells": 0, "notes": []}

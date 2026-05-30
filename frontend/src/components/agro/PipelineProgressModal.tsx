@@ -24,8 +24,7 @@ const NEPAL_FACTS = [
   "Nepal is one of Asia's top ginger exporters — Palpa, Syangja, and Pokhara are the main growing areas.",
   "Diesel price changes shift Terai-grown produce prices within 10–14 days via transport cost pressure.",
   "Kathmandu Valley imports ~60% of its vegetables from Terai plains via the Hetauda–Mugling highway.",
-  "Cabbage prices often drop 40% during winter harvest (Nov–Jan) and spike in pre-monsoon months.",
-  "The ML model learns from 5+ years of Kalimati records across all 10 featured commodities.",
+"The ML model learns from 5+ years of Kalimati records across all 10 featured commodities.",
   "Rice (Chamal) is Nepal's staple — grown in Terai lowlands and consumed across all 77 districts.",
   "Onion prices in Nepal are closely linked to Indian import policy; supply disruptions spike prices fast.",
   "Garlic cultivation is expanding in mid-hills to reduce dependence on Chinese imports.",
@@ -165,7 +164,6 @@ export function PipelineProgressModal({
             {running && (
               <span className="agro-pipeline-elapsed">
                 &nbsp;· {Math.floor(elapsedSeconds / 60)}:{String(elapsedSeconds % 60).padStart(2, "0")} elapsed
-                &nbsp;· <span className="agro-pipeline-pct">{progressPct.toFixed(0)}%</span>
               </span>
             )}
           </p>

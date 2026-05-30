@@ -78,7 +78,7 @@ export async function scrapeNocFuelPrices(): Promise<{ saved: number; message: s
 export async function runMlTrainJob(): Promise<{ ok: boolean; detail?: string }> {
   try {
     const url = `${env.mlServiceUrl.replace(/\/$/, "")}/train`;
-    await axios.post(url, {}, { timeout: 600_000 });
+    await axios.post(url, { force: true }, { timeout: 600_000 });
     return { ok: true, detail: "ML training finished." };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

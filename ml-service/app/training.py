@@ -94,8 +94,8 @@ def moving_average_forecast(hist_prices: list[float], steps: int, window: int = 
     return [round(base, 2)] * steps
 
 
-def run_training() -> dict:
-    merged, full, meta = merge_feature_frame()
+def run_training(force: bool = False) -> dict:
+    merged, full, meta = merge_feature_frame(force=force)
     if not merged.empty and "date" in merged.columns:
         min_date = merged["date"].min()
         max_date = merged["date"].max()

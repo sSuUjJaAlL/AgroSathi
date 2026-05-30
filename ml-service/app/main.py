@@ -4,6 +4,7 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -18,11 +19,15 @@ def health():
     return {"status": "ok", "service": "agri-price-ml", "version": "2.0.0"}
 
 
+class TrainRequest(BaseModel):
+    force: bool = False
+
+
 @app.post("/train")
-def train():
-    """Train RandomForest + Moving Average for all crops. Writes algorithm-tagged predictions."""
+def train(body: TrainRequest = TrainRequest()):
+    """Train RandomForest for all crops. force=True bypasses preprocessing cache."""
     try:
-        result = run_training()
+        result = run_training(force=body.force)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

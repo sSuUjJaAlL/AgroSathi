@@ -257,30 +257,6 @@ export default function ChartsPage() {
           </div>
         )}
 
-        {viewRole === "buyer" && multiAlgoChart.length > 0 && (
-          <div className="agro-card cp-card">
-            <SectionHeader
-              label="7-Day Forecast — All 3 Algorithms"
-              sub="RandomForest (blue) · LSTM (green) · Moving Average (gray dashed)"
-            />
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={multiAlgoChart} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#e5e7eb" strokeDasharray="4 4" />
-                <XAxis dataKey="day" tick={{ fill: "#6b7280", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} domain={["auto", "auto"]} label={{ value: "NPR/KG", angle: -90, position: "insideLeft", fill: "#6b7280", fontSize: 10 }} />
-                <Tooltip contentStyle={TT} formatter={(v: number) => [`Rs. ${v.toFixed(2)}`, ""]} />
-                <Line type="monotone" dataKey="ma" stroke="#9ca3af" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Moving Average" connectNulls />
-                <Line type="monotone" dataKey="rf" stroke="#3A86FF" strokeWidth={2.5} dot={{ r: 4, fill: "#3A86FF", strokeWidth: 0 }} name="RandomForest" connectNulls />
-                <Line type="monotone" dataKey="lstm" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: "#10b981", strokeWidth: 0 }} name="LSTM" connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-            <div className="cp-legend">
-              <span><span className="cp-dot" style={{ background: "#3A86FF" }} /> RandomForest</span>
-              <span><span className="cp-dot" style={{ background: "#10b981" }} /> LSTM</span>
-              <span><span className="cp-dot" style={{ background: "#9ca3af" }} /> Moving Average</span>
-            </div>
-          </div>
-        )}
 
         {/* ── SECTION 3: 30-DAY TREND OUTLOOK (buyer only) ─── */}
         {viewRole === "buyer" && chart30.length > 0 && (

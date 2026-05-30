@@ -39,7 +39,7 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
         const today = new Date();
         today.setUTCHours(0, 0, 0, 0);
         const recent = await CropPrice.find(
-          { item_name: { $in: crops }, date: { $gte: new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000) } },
+          { item_name: { $in: crops }, date: { $gte: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000) } },
           { item_name: 1, avg_price: 1, date: 1 }
         ).sort({ date: -1 }).lean();
 

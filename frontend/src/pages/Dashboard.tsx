@@ -26,7 +26,8 @@ import { usePipeline } from "../contexts/PipelineContext";
 type RecCode = "BUY_EARLY_OR_HOLD" | "SELL" | "WAIT";
 
 interface RecConfig {
-  label: string;
+  buyerLabel: string;
+  farmerLabel: string;
   bg: string;
   border: string;
   color: string;
@@ -36,32 +37,35 @@ interface RecConfig {
 
 const REC: Record<RecCode, RecConfig> = {
   BUY_EARLY_OR_HOLD: {
-    label: "HOLD / BUY EARLY",
+    buyerLabel: "WAIT — PRICE IS RISING",
+    farmerLabel: "SELL NOW — GOOD PRICE",
     bg: "#f0fdf4",
     border: "#16a34a",
     color: "#15803d",
     buyerText: (cur, pred) =>
-      `Price forecast is rising. ${cur != null && pred != null ? `Today Rs.${cur.toFixed(0)} → 7-day avg Rs.${pred.toFixed(0)}/KG.` : ""} Buy early or hold existing stock.`,
+      `Price is rising — buy early before it climbs further. ${cur != null && pred != null ? `Today Rs.${cur.toFixed(0)}, 7-day forecast Rs.${pred.toFixed(0)}/KG.` : ""}`,
     farmerText: (cur, avg30) =>
-      `Current price is above the 30-day average. ${cur != null && avg30 != null ? `Today Rs.${cur.toFixed(0)} vs avg Rs.${avg30.toFixed(0)}/KG.` : ""} Good time to sell at market.`,
+      `Price is above average — good time to sell at market. ${cur != null && avg30 != null ? `Today Rs.${cur.toFixed(0)} vs 30-day avg Rs.${avg30.toFixed(0)}/KG.` : ""}`,
   },
   SELL: {
-    label: "SELL / REDUCE STOCK",
-    bg: "#fff1f2",
-    border: "#dc2626",
-    color: "#991b1b",
+    buyerLabel: "BUY NOW — PRICE IS LOW",
+    farmerLabel: "HOLD — WAIT FOR RECOVERY",
+    bg: "#eff6ff",
+    border: "#2563eb",
+    color: "#1e40af",
     buyerText: (cur, pred) =>
-      `Price is expected to fall. ${cur != null && pred != null ? `Today Rs.${cur.toFixed(0)} → forecast Rs.${pred.toFixed(0)}/KG.` : ""} Wait before buying more stock.`,
+      `Price is falling — good time to buy. ${cur != null && pred != null ? `Today Rs.${cur.toFixed(0)}, 7-day forecast Rs.${pred.toFixed(0)}/KG.` : ""} Buy now before prices rebound.`,
     farmerText: (cur, avg30) =>
-      `Price is expected to drop. ${cur != null && avg30 != null ? `Today Rs.${cur.toFixed(0)} vs avg Rs.${avg30.toFixed(0)}/KG.` : ""} Consider selling now before the fall.`,
+      `Price is dropping — hold your stock and wait. ${cur != null && avg30 != null ? `Today Rs.${cur.toFixed(0)} vs 30-day avg Rs.${avg30.toFixed(0)}/KG.` : ""} Sell when prices recover.`,
   },
   WAIT: {
-    label: "WAIT — STABLE MARKET",
+    buyerLabel: "STABLE — MONITOR MARKET",
+    farmerLabel: "STABLE — HOLD STOCK",
     bg: "#f8fafc",
     border: "#64748b",
     color: "#475569",
     buyerText: (cur) =>
-      `Market is currently stable. ${cur != null ? `Current price Rs.${cur.toFixed(0)}/KG.` : ""} No urgent action needed — monitor for the next few days.`,
+      `Market is stable. ${cur != null ? `Current price Rs.${cur.toFixed(0)}/KG.` : ""} No urgent action — monitor over the next few days.`,
     farmerText: (cur) =>
       `Market is stable. ${cur != null ? `Current price Rs.${cur.toFixed(0)}/KG.` : ""} Hold stock and wait for a better selling window.`,
   },
@@ -184,9 +188,6 @@ export default function Dashboard() {
             </div>
             <div className="agro-user-mini">
               <span className="muted-agro">{email}</span>
-              <button type="button" className="agro-btn-ghost" onClick={logout}>
-                Logout
-              </button>
             </div>
           </div>
 
@@ -265,7 +266,7 @@ export default function Dashboard() {
               </div>
 
               <div className="dash-rec-label" style={{ color: cfg.color }}>
-                {cfg.label}
+                {viewRole === "buyer" ? cfg.buyerLabel : cfg.farmerLabel}
               </div>
 
               <p className="dash-rec-text" style={{ color: cfg.color }}>

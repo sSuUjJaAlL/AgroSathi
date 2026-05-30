@@ -30,7 +30,7 @@ export function AgroHeader({
           <div>
             <div className="agro-brand-title">AgroPredict Nepal</div>
             <div className="agro-brand-tagline">
-              Live Kalimati prices &middot; ML forecasts &middot; Weather &amp; fuel context
+              Price Prediction System
             </div>
           </div>
         </div>
