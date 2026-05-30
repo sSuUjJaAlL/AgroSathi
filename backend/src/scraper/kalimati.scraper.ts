@@ -22,6 +22,133 @@ export interface KalimatiScrapeResult {
 
 const KALIMATI_PRICE_URL = "https://kalimatimarket.gov.np/price";
 
+/** Translates Nepali names (live site) → English names (CSV archive / historical DB). */
+const NEPALI_TO_ENGLISH: Record<string, string> = {
+  // Ginger
+  "अदुवा": "Ginger",
+  // Potato
+  "आलु रातो(लाम्चो)": "Potato Red",
+  "रातो आलु(गोलो)": "Potato Red",
+  "आलु रातो": "Potato Red",
+  "आलु सेतो": "Potato White",
+  // Tomato
+  "गोलभेडा ठूलो(नेपाली)": "Tomato Big(Nepali)",
+  "गोलभेडा ठूलो(भारतीय)": "Tomato Big(Indian)",
+  "गोलभेडा सानो(टनेल)": "Tomato Small(Tunnel)",
+  "गोलभेडा सानो(लोकल)": "Tomato Small(Local)",
+  "गोलभेडा सानो(भारतीय)": "Tomato Small(Indian)",
+  "गोलभेडा सानो(तराई)": "Tomato Small(Terai)",
+  "गोलभेडा": "Tomato Big(Nepali)",
+  // Onion
+  "प्याज सुकेको (भारतीय)": "Onion Dry (Indian)",
+  "प्याज सुकेको(भारतीय)": "Onion Dry (Indian)",
+  "प्याज सुकेको(चाइनिज)": "Onion Dry (Chinese)",
+  "प्याज सुकेको": "Onion Dry (Indian)",
+  "प्याज हरियो": "Onion Green",
+  // Cauliflower
+  "काउली स्थानिय": "Cauli Local",
+  "काउली स्थानिय(ज्यापु)": "Cauli Local(Jyapu)",
+  "काउली तराई": "Cauli Terai",
+  "काउली": "Cauli Local",
+  // Cabbage
+  "बन्दा(लोकल)": "Cabbage(Local)",
+  "बन्दा(तराई)": "Cabbage(Terai)",
+  "बन्दा": "Cabbage",
+  "रातो बन्दा": "Red Cabbbage",
+  // Garlic
+  "लसुन सुकेको चाइनिज": "Garlic Dry Chinese",
+  "लसुन सुकेको नेपाली": "Garlic Dry Nepali",
+  "लसुन हरियो": "Garlic Green",
+  "लसुन सुकेको": "Garlic Dry Chinese",
+  // Chilli
+  "खु्र्सानी सुकेको": "Chilli Dry",
+  "खुर्सानी सुकेको": "Chilli Dry",
+  "खुर्सानी हरियो(बुलेट)": "Chilli Green(Bullet)",
+  "खुर्सानी हरियो(माछे)": "Chilli Green(Machhe)",
+  "खुर्सानी हरियो(अकबरे)": "Chilli Green(Akbare)",
+  "खुर्सानी हरियो(लाम्चो)": "Chilli Green",
+  "खुर्सानी हरियो": "Chilli Green",
+  "भेडे खु्र्सानी": "Capsicum",
+  "भेडे खुर्सानी": "Capsicum",
+  // Carrot
+  "गाजर(लोकल)": "Carrot(Local)",
+  "गाजर(तराई)": "Carrot(Terai)",
+  "गाजर": "Carrot(Local)",
+  // Radish
+  "सेतो मूला(हाइब्रीड)": "Raddish White(Hybrid)",
+  "सेतो मूला(लोकल)": "Raddish White(Local)",
+  "रातो मूला": "Raddish Red",
+  "मूला": "Raddish White(Local)",
+  // Others
+  "केरा(नेपाली)": "Banana(Nepali)",
+  "केरा(मालभोग)": "Banana(Malbhog)",
+  "केरा": "Banana",
+  "स्याउ(फूजी)": "Apple(Fuji)",
+  "स्याउ(झोले)": "Apple(Jholey)",
+  "अनार": "Pomegranate",
+  "कागती": "Lime",
+  "लीच्ची(भारतीय)": "Litchi(Indian)",
+  "लीच्ची(लोकल)": "Litchi(Local)",
+  "मेवा(नेपाली)": "Papaya(Nepali)",
+  "मेवा(भारतीय)": "Papaya(Indian)",
+  "भन्टा लाम्चो": "Brinjal Long",
+  "भन्टा डल्लो": "Brinjal Round",
+  "तितो करेला": "Bitter Gourd",
+  "लौका": "Bottle Gourd",
+  "च्याउ(कन्य)": "Mushroom(Kanya)",
+  "च्याउ(डल्ले)": "Mushroom(Button)",
+  "राजा च्याउ": "Mushroom(Oyster)",
+  "सिताके च्याउ": "Mushroom(Shiitake)",
+  "गुन्दुक": "Gundruk",
+  "तोफु": "Tofu",
+  "तामा": "Bamboo Shoot",
+  "हरियो धनिया": "Coriander Green",
+  "पुदीना": "Mint",
+  "पार्सले": "Parseley",
+  "पालूगो साग": "Spinach Leaf",
+  "रायो साग": "Mustard Leaf",
+  "मेथीको साग": "Fenugreek Leaf",
+  "चमसूरको साग": "Cress Leaf",
+  "सौफको साग": "Fennel Leaf",
+  "जिरीको साग": "Coriander Green",
+  "सेलरी": "Celery",
+  "परवर(लोकल)": "Pointed Gourd(Terai)",
+  "घिरौला": "Squash(Long)",
+  "स्कूस": "Squash(Round)",
+  "घिउ सिमी(राजमा)": "French Bean(Rajma)",
+  "घिउ सिमी(लोकल)": "French Bean(Local)",
+  "घिउ सिमी(हाइब्रीड)": "French Bean(Hybrid)",
+  "मकै बोडी": "Cowpea(Short)",
+  "बोडी(तने)": "Sword Bean",
+  "मटरकोशा": "Green Peas",
+  "सखरखण्ड": "Sweet Potato",
+  "पिंडालू": "Arum",
+  "न्यूरो": "Asparagus",
+  "कुरीलो": "Asparagus",
+  "भिण्डी": "Okara",
+  "फर्सी पाकेको": "Pumpkin",
+  "फर्सी हरियो(लाम्चो)": "Squash(Long)",
+  "हरियो फर्सी(डल्लो)": "Pumpkin",
+  "चुकुन्दर": "Sugarbeet",
+  "इमली": "Tamarind",
+  "छ्यापी सुकेको": "Tamarind",
+  "तरबुजा(हरियो)": "Water Melon(Green)",
+  "रुख कटहर": "Jack Fruit",
+  "भुई कटहर": "Christophine",
+  "मकै(हरियो)": "Sweet Corn",
+  "सजिवन": "Drumstick",
+  "ताजा माछा(रहु)": "Fish Fresh(Rahu)",
+  "ताजा माछा(बचुवा)": "Fish Fresh(Bachuwa)",
+  "ताजा माछा(छडी)": "Fish Fresh(Chhadi)",
+  "ताजा माछा(मुंगरी)": "Fish Fresh(Mungari)",
+  "भटमासकोशा": "Soyabean Pod",
+};
+
+function translateName(name: string): string {
+  const trimmed = name.trim();
+  return NEPALI_TO_ENGLISH[trimmed] ?? trimmed;
+}
+
 /** Devanagari digits → ASCII (Kalimati renders amounts like "रू ८०.००"). */
 const DEVANAGARI_DIGIT_MAP: Record<string, string> = {
   "०": "0",
@@ -82,7 +209,7 @@ export function parseKalimatiHtml(html: string, fetchedAt = new Date().toISOStri
     if (min == null || max == null || avg == null) return;
 
     rows.push({
-      item_name: name,
+      item_name: translateName(name),
       unit,
       min_price: min,
       max_price: max,
