@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 from urllib.parse import urlparse
 
 import numpy as np
@@ -17,6 +18,58 @@ def get_mongo_db():
     uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/agri_price_nepal")
     client = MongoClient(uri)
     return client[db_name_from_uri(uri)]
+
+
+def _coerce_record(r: dict) -> dict:
+    """Convert numpy/pandas types to plain Python for MongoDB."""
+    out = {}
+    for k, v in r.items():
+        if isinstance(v, (np.integer,)):
+            out[k] = int(v)
+        elif isinstance(v, (np.floating,)):
+            out[k] = None if np.isnan(v) else float(v)
+        elif isinstance(v, float) and np.isnan(v):
+            out[k] = None
+        elif isinstance(v, pd.Timestamp):
+            out[k] = v.to_pydatetime()
+        else:
+            out[k] = v
+    return out
+
+
+def store_preprocessed_features(full: pd.DataFrame, meta: dict) -> None:
+    db = get_mongo_db()
+    records = [_coerce_record(r) for r in full.to_dict("records")]
+    db["preprocessed_features"].drop()
+    if records:
+        db["preprocessed_features"].insert_many(records)
+    db["preprocessed_meta"].replace_one(
+        {"_id": "latest"},
+        {"_id": "latest", "computed_at": datetime.utcnow(), "row_count": len(records), "meta": meta},
+        upsert=True,
+    )
+    print(f"[ML] Stored {len(records)} preprocessed rows to MongoDB.")
+
+
+def load_preprocessed_features() -> tuple[pd.DataFrame, pd.DataFrame, dict] | None:
+    """Load cached preprocessed feature frame if computed today (UTC)."""
+    db = get_mongo_db()
+    entry = db["preprocessed_meta"].find_one({"_id": "latest"})
+    if not entry:
+        return None
+    computed_at: datetime = entry["computed_at"]
+    if computed_at.date() != datetime.utcnow().date():
+        return None
+    records = list(db["preprocessed_features"].find({}, {"_id": 0}))
+    if not records:
+        return None
+    full = pd.DataFrame(records)
+    if "date" in full.columns:
+        full["date"] = pd.to_datetime(full["date"])
+    train_df = full.dropna(subset=["target_next"])
+    meta: dict = entry.get("meta", {"imputed_cells": 0, "notes": ["Loaded from cache"]})
+    print(f"[ML] Loaded {len(full)} preprocessed rows from MongoDB cache (computed {computed_at.date()}).")
+    return train_df, full, meta
 
 
 def load_raw_frames():
@@ -43,6 +96,10 @@ def load_raw_frames():
 
 
 def merge_feature_frame() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    cached = load_preprocessed_features()
+    if cached is not None:
+        return cached
+
     crops, weather, fuel = load_raw_frames()
     meta: dict = {"imputed_cells": 0, "notes": []}
 
@@ -131,6 +188,7 @@ def merge_feature_frame() -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     full = merged.dropna(subset=["lag_1_price", "lag_7_price", "moving_avg_7", "moving_avg_30"])
     train_df = full.dropna(subset=["target_next"])
 
+    store_preprocessed_features(full, meta)
     return train_df, full, meta
 
 

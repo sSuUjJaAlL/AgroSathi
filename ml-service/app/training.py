@@ -154,8 +154,6 @@ def run_training() -> dict:
     db = get_mongo_db()
     batch_rf7 = str(uuid.uuid4())
     batch_rf30 = str(uuid.uuid4())
-    batch_ma7 = str(uuid.uuid4())
-    batch_ma30 = str(uuid.uuid4())
     gen_date = datetime.utcnow()
 
     items = full["item_name"].unique()
@@ -232,38 +230,6 @@ def run_training() -> dict:
                 doc["trend"] = trend
             docs.append(doc)
 
-        # --- Moving Average baseline predictions ---
-        ma_preds7 = moving_average_forecast(hist, 7, window=7)
-        for i, price in enumerate(ma_preds7):
-            target = gen_date + timedelta(days=i + 1)
-            docs.append({
-                "date": gen_date,
-                "target_date": target,
-                "item_name": item,
-                "predicted_price": price,
-                "horizon": "7d",
-                "forecast_batch_id": batch_ma7,
-                "accuracy": None,
-                "confidence": "N/A",
-                "reason": "7-day rolling average baseline",
-                "algorithm": "moving_average",
-            })
-
-        ma_preds30 = moving_average_forecast(hist, 30, window=30)
-        for i, price in enumerate(ma_preds30):
-            target = gen_date + timedelta(days=i + 1)
-            docs.append({
-                "date": gen_date,
-                "target_date": target,
-                "item_name": item,
-                "predicted_price": price,
-                "horizon": "30d",
-                "forecast_batch_id": batch_ma30,
-                "accuracy": None,
-                "confidence": "N/A",
-                "reason": "30-day rolling average baseline",
-                "algorithm": "moving_average",
-            })
 
     if docs:
         db["predictions"].insert_many(docs)
@@ -277,7 +243,5 @@ def run_training() -> dict:
         "batches": {
             "rf_7d": batch_rf7,
             "rf_30d": batch_rf30,
-            "ma_7d": batch_ma7,
-            "ma_30d": batch_ma30,
         },
     }
