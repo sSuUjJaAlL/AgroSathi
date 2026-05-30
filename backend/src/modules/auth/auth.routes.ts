@@ -5,6 +5,7 @@ import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { AuthRepository } from "./auth.repository.js";
 import { User } from "../../models/User.js";
+import { sendSubscriptionWelcomeEmail } from "../../services/email.service.js";
 
 const repo = new AuthRepository();
 const service = new AuthService(repo);
@@ -29,4 +30,14 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
   }
   await User.findOneAndUpdate({ email: req.user!.email }, { cropPreferences });
   res.json({ ok: true, cropPreferences });
+
+  if ((cropPreferences as string[]).length > 0) {
+    sendSubscriptionWelcomeEmail({
+      toEmail: req.user!.email,
+      crops: cropPreferences as string[],
+      role: req.user!.role as "buyer" | "farmer",
+    }).catch((err) =>
+      console.error("[Email] Welcome email failed:", err instanceof Error ? err.message : err)
+    );
+  }
 });

@@ -1868,6 +1868,285 @@ a:hover {
 .reports-vs-avg.low  { background: #d8f3dc; color: #1b4332; }
 .reports-vs-avg.mid  { background: #e2e8f0; color: #475569; }
 
+/* ── Dashboard hero ─────────────────────────────────────────── */
+
+.dash-hero {
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+  background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);
+  color: #fff;
+  border-radius: var(--radius);
+}
+
+.dash-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.dash-hero-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--display);
+  font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #fff;
+}
+
+.dash-hero-sub {
+  margin: 0;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.dash-hero-bottom {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.dash-hero-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: min(100%, 260px);
+}
+
+.dash-hero-select {
+  width: 100%;
+  max-width: 420px;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.dash-hero-select:focus {
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.dash-hero-select option {
+  background: #1b4332;
+  color: #fff;
+}
+
+.dash-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dash-hero .agro-user-mini {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.dash-hero .muted-agro {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.dash-hero .agro-btn-ghost {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dash-hero .agro-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.dash-hero .agro-nav-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.dash-hero .agro-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* ── Recommendation card ─────────────────────────────────────── */
+
+.dash-rec-card {
+  border-radius: var(--radius);
+  border: 2px solid;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.dash-rec-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #fff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  margin-bottom: 0.85rem;
+}
+
+.dash-rec-label {
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.6rem;
+}
+
+.dash-rec-text {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  max-width: 640px;
+}
+
+.dash-rec-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .dash-rec-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .dash-rec-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.dash-rec-stat {
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.dash-rec-stat-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #475569;
+}
+
+.dash-rec-stat-val {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.dash-rec-stat-unit {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* ── Chart card ──────────────────────────────────────────────── */
+
+.dash-chart-card {
+  margin-bottom: 1.25rem;
+}
+
+.dash-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.dash-chart-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* ── Table card ──────────────────────────────────────────────── */
+
+.dash-table-card {
+  margin-bottom: 1.25rem;
+}
+
+/* ── ChartsPage ──────────────────────────────────────────────── */
+
+.cp-card {
+  margin-bottom: 1.5rem;
+}
+
+.cp-section-head {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cp-section-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cp-section-sub {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+}
+
+.cp-empty {
+  padding: 2.5rem 0;
+  text-align: center;
+}
+
+.cp-weather-row {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.cp-legend {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.cp-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
 /* ── Brand tagline ──────────────────────────────────────────── */
 
 .agro-brand-tagline {
