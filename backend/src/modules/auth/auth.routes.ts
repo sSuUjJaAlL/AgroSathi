@@ -6,6 +6,7 @@ import { AuthService } from "./auth.service.js";
 import { AuthRepository } from "./auth.repository.js";
 import { User } from "../../models/User.js";
 import { CropPrice } from "../../models/CropPrice.js";
+import { Prediction } from "../../models/Prediction.js";
 import { sendSubscriptionWelcomeEmail } from "../../services/email.service.js";
 
 const repo = new AuthRepository();
@@ -50,11 +51,28 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
           }
         }
 
+        const userRole = req.user!.role as "buyer" | "farmer";
+        const forecastHorizon = userRole === "buyer" ? "7d" : "30d";
+
+        const forecastRows = await Prediction.find(
+          { item_name: { $in: crops }, horizon: forecastHorizon, algorithm: "random_forest" },
+          { item_name: 1, predicted_price: 1, target_date: 1, date: 1 }
+        ).sort({ date: -1, target_date: 1 }).lean();
+
+        const forecastPrices: Record<string, number[]> = {};
+        for (const row of forecastRows) {
+          if (!forecastPrices[row.item_name]) forecastPrices[row.item_name] = [];
+          if (forecastPrices[row.item_name].length < 7) {
+            forecastPrices[row.item_name].push(row.predicted_price);
+          }
+        }
+
         await sendSubscriptionWelcomeEmail({
           toEmail: req.user!.email,
           crops,
-          role: req.user!.role as "buyer" | "farmer",
+          role: userRole,
           todayPrices,
+          forecastPrices,
         });
       } catch (err) {
         console.error("[Email] Welcome email failed:", err instanceof Error ? err.message : err);
