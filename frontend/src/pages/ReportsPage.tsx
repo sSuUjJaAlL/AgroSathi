@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, TrendingUp, TrendingDown, Minus, BarChart2, RefreshCw } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -11,7 +11,7 @@ function formatDate(iso: string) {
 }
 
 function priceRange(row: SnapRow) {
-  return `Rs. ${row.min_price.toFixed(0)} – ${row.max_price.toFixed(0)}`;
+  return `Rs. ${row.min_price.toFixed(0)} â€“ ${row.max_price.toFixed(0)}`;
 }
 
 export default function ReportsPage() {
@@ -72,7 +72,7 @@ export default function ReportsPage() {
       <div className="agro-header-sub">
         <div className="agro-header-sub-inner">
           <div className="agro-status-chips">
-            <span className="agro-chip"><BarChart2 size={14} /> Market Overview — Kalimati Prices</span>
+            <span className="agro-chip"><BarChart2 size={14} /> Market Overview â€” Kalimati Prices</span>
           </div>
         </div>
       </div>
@@ -92,13 +92,13 @@ export default function ReportsPage() {
           <div className="reports-summary-card">
             <div className="agro-summary-label">Highest price</div>
             <div className="agro-summary-val agro-sum-amber">
-              {displayed.length ? `Rs. ${Math.max(...displayed.map(r => r.avg_price)).toFixed(0)}` : "—"}
+              {displayed.length ? `Rs. ${Math.max(...displayed.map(r => r.avg_price)).toFixed(0)}` : "â€”"}
             </div>
           </div>
           <div className="reports-summary-card">
             <div className="agro-summary-label">Lowest price</div>
             <div className="agro-summary-val agro-sum-green">
-              {displayed.length ? `Rs. ${Math.min(...displayed.map(r => r.avg_price)).toFixed(0)}` : "—"}
+              {displayed.length ? `Rs. ${Math.min(...displayed.map(r => r.avg_price)).toFixed(0)}` : "â€”"}
             </div>
           </div>
         </div>
@@ -130,9 +130,9 @@ export default function ReportsPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               >
-                <option value="name">Name A–Z</option>
-                <option value="price_desc">Price High → Low</option>
-                <option value="price_asc">Price Low → High</option>
+                <option value="name">Name Aâ€“Z</option>
+                <option value="price_desc">Price High â†’ Low</option>
+                <option value="price_asc">Price Low â†’ High</option>
               </select>
               <button type="button" className="agro-btn-ghost" onClick={reload} title="Refresh">
                 <RefreshCw size={15} />
@@ -143,7 +143,7 @@ export default function ReportsPage() {
           {err && <div className="agro-banner agro-banner-err" style={{ margin: "0.75rem 0 0" }}>{err}</div>}
 
           {loading ? (
-            <div style={{ textAlign: "center", padding: "3rem 0", color: "#64748b" }}>Loading market data…</div>
+            <div style={{ textAlign: "center", padding: "3rem 0", color: "#64748b" }}>Loading market dataâ€¦</div>
           ) : displayed.length === 0 ? (
             <div style={{ textAlign: "center", padding: "3rem 0", color: "#94a3b8" }}>No commodity data. Run the pipeline to populate prices.</div>
           ) : (
@@ -194,7 +194,7 @@ export default function ReportsPage() {
                             style={{ fontSize: "0.8rem", padding: "0.3rem 0.65rem" }}
                             onClick={() => navigate("/dashboard")}
                           >
-                            Analyse →
+                            Analyse â†’
                           </button>
                         </td>
                       </tr>
@@ -208,7 +208,7 @@ export default function ReportsPage() {
       </main>
 
       <footer className="agro-footer">
-        AgroPredict Nepal | Agricultural Price Prediction System | Final Year CSIT Project
+        AgroPredict Nepal · Kalimati Market Data
       </footer>
     </div>
   );

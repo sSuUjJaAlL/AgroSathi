@@ -5,6 +5,7 @@ import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { AuthRepository } from "./auth.repository.js";
 import { User } from "../../models/User.js";
+import { CropPrice } from "../../models/CropPrice.js";
 import { sendSubscriptionWelcomeEmail } from "../../services/email.service.js";
 
 const repo = new AuthRepository();
@@ -32,12 +33,32 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
   res.json({ ok: true, cropPreferences });
 
   if ((cropPreferences as string[]).length > 0) {
-    sendSubscriptionWelcomeEmail({
-      toEmail: req.user!.email,
-      crops: cropPreferences as string[],
-      role: req.user!.role as "buyer" | "farmer",
-    }).catch((err) =>
-      console.error("[Email] Welcome email failed:", err instanceof Error ? err.message : err)
-    );
+    const crops = cropPreferences as string[];
+    void (async () => {
+      try {
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+        const recent = await CropPrice.find(
+          { item_name: { $in: crops }, date: { $gte: new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000) } },
+          { item_name: 1, avg_price: 1, date: 1 }
+        ).sort({ date: -1 }).lean();
+
+        const todayPrices: Record<string, number> = {};
+        for (const row of recent) {
+          if (!(row.item_name in todayPrices)) {
+            todayPrices[row.item_name] = row.avg_price;
+          }
+        }
+
+        await sendSubscriptionWelcomeEmail({
+          toEmail: req.user!.email,
+          crops,
+          role: req.user!.role as "buyer" | "farmer",
+          todayPrices,
+        });
+      } catch (err) {
+        console.error("[Email] Welcome email failed:", err instanceof Error ? err.message : err);
+      }
+    })();
   }
 });

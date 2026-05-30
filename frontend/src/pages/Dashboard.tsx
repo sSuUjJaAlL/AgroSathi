@@ -558,7 +558,7 @@ export default function Dashboard() {
       </main>
 
       <footer className="agro-footer">
-        AgroPredict Nepal | Agricultural Price Prediction System | Final Year CSIT Project
+        AgroPredict Nepal &nbsp;·&nbsp; Kalimati Market Data
       </footer>
     </div>
   );

@@ -19,6 +19,19 @@ export function isEmailConfigured(): boolean {
   return Boolean(env.smtp.user && env.smtp.pass);
 }
 
+export async function verifySmtp(): Promise<void> {
+  if (!isEmailConfigured()) {
+    console.warn("[Email] SMTP not configured — set SMTP_USER and SMTP_PASS in .env");
+    return;
+  }
+  try {
+    await getTransporter().verify();
+    console.log(`[Email] SMTP ready — sending from ${env.smtp.from}`);
+  } catch (err) {
+    console.error("[Email] SMTP verification failed:", err instanceof Error ? err.message : err);
+  }
+}
+
 function buildHtml(opts: {
   commodity: string;
   direction: "DROP" | "RISE";
@@ -320,15 +333,24 @@ export async function sendSubscriptionWelcomeEmail(opts: {
   toEmail: string;
   crops: string[];
   role: "buyer" | "farmer";
+  todayPrices?: Record<string, number>;
 }): Promise<void> {
   if (!isEmailConfigured()) {
     console.warn("[Email] SMTP not configured — skipping subscription welcome email.");
     return;
   }
 
-  const roleLabel = opts.role === "buyer" ? "Buyer" : "Farmer";
-  const cropItems = opts.crops
-    .map((c) => `<li style="padding:4px 0;font-size:14px;color:#1e293b;">${c}</li>`)
+  const cropRows = opts.crops
+    .map((c) => {
+      const price = opts.todayPrices?.[c];
+      const priceCell = price != null
+        ? `<td style="padding:10px 16px;font-size:14px;color:#15803d;font-weight:700;">Rs. ${price.toFixed(0)} / KG</td>`
+        : `<td style="padding:10px 16px;font-size:13px;color:#94a3b8;">—</td>`;
+      return `<tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:10px 16px;font-size:14px;color:#1e293b;font-weight:600;">${c}</td>
+        ${priceCell}
+      </tr>`;
+    })
     .join("");
 
   const html = `<!DOCTYPE html>
@@ -336,74 +358,82 @@ export async function sendSubscriptionWelcomeEmail(opts: {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>AgroPredict Nepal — Subscription Confirmed</title>
+<title>AgroPrice Prediction — Subscription Confirmed</title>
 </head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
     <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+      <table width="540" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
         <tr>
-          <td style="background:#1b4332;padding:28px 32px;">
-            <div style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">AgroPredict Nepal</div>
-            <div style="color:rgba(255,255,255,0.65);font-size:13px;margin-top:4px;">Agricultural Price Prediction System</div>
+          <td style="background:#1b4332;padding:24px 32px;">
+            <div style="color:#ffffff;font-size:20px;font-weight:800;">AgroPrice Prediction</div>
+            <div style="color:rgba(255,255,255,0.6);font-size:12px;margin-top:3px;">Kalimati Market · Nepal</div>
           </td>
         </tr>
+
         <tr>
-          <td style="background:#ecfdf5;padding:24px 32px;border-bottom:1px solid #a7f3d0;">
-            <div style="font-size:28px;font-weight:900;color:#15803d;letter-spacing:-0.03em;">
-              Subscription Confirmed
-            </div>
-            <div style="font-size:14px;color:#166534;margin-top:6px;">
-              You have subscribed to daily price updates from AgroPredict Nepal.
+          <td style="background:#ecfdf5;padding:20px 32px;border-bottom:2px solid #a7f3d0;">
+            <div style="font-size:22px;font-weight:800;color:#15803d;">You have subscribed to AgroPrice Prediction</div>
+            <div style="font-size:13px;color:#166534;margin-top:6px;">
+              We will notify you about your selected crops daily.
             </div>
           </td>
         </tr>
+
         <tr>
-          <td style="padding:28px 32px;">
-            <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
-              Hi <strong>${roleLabel}</strong>, you are now subscribed to daily price alerts for the following commodities from
-              <strong>Kalimati Market, Kathmandu</strong>:
+          <td style="padding:24px 32px;">
+            <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;">
+              Hi, your crop price alerts are now active. Below are your subscribed commodities and their prices from <strong>Kalimati Market</strong> today:
             </p>
-            <ul style="margin:0 0 24px;padding-left:20px;list-style:disc;">
-              ${cropItems}
-            </ul>
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin-bottom:24px;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">Commodity</th>
+                  <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">Today's Price</th>
+                </tr>
+              </thead>
+              <tbody>${cropRows}</tbody>
+            </table>
+
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
               <tr>
-                <td style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:14px 16px;">
-                  <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;">What happens next?</div>
-                  <div style="font-size:14px;color:#166534;line-height:1.6;">
+                <td style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:12px 16px;">
+                  <div style="font-size:13px;color:#166534;line-height:1.6;">
                     ${opts.role === "buyer"
-                      ? "You will receive email alerts when prices are forecast to drop significantly — giving you the best time to buy."
-                      : "You will receive email alerts when prices are forecast to rise or are above the 30-day average — helping you sell at the right time."}
+                      ? "You will receive price drop alerts — helping you buy at the right time."
+                      : "You will receive price rise alerts — helping you sell at the best time."}
                   </div>
                 </td>
               </tr>
             </table>
+
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
               <tr>
                 <td align="center">
                   <a href="http://localhost:5173/dashboard"
-                     style="display:inline-block;background:#1b4332;color:#ffffff;font-size:14px;font-weight:700;padding:13px 32px;border-radius:8px;text-decoration:none;letter-spacing:0.2px;">
-                    Go to Dashboard &rarr;
+                     style="display:inline-block;background:#1b4332;color:#ffffff;font-size:14px;font-weight:700;padding:12px 28px;border-radius:8px;text-decoration:none;">
+                    View Dashboard →
                   </a>
                 </td>
               </tr>
             </table>
-            <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;"/>
-            <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
-              You are receiving this because your account (${opts.toEmail}) subscribed to crop alerts on AgroPredict Nepal.
-              Price forecasts are based on Kalimati Market historical data and ML models.
-              Alerts are generated when significant price movements are detected.
+
+            <p style="margin:0;font-size:11px;color:#9ca3af;line-height:1.6;">
+              Sent to ${opts.toEmail} · AgroPrice Prediction Nepal · Kalimati Market data
             </p>
           </td>
         </tr>
+
         <tr>
-          <td style="background:#1e293b;padding:16px 32px;text-align:center;">
-            <span style="color:rgba(255,255,255,0.5);font-size:12px;">
-              &copy; ${new Date().getFullYear()} AgroPredict Nepal &nbsp;&middot;&nbsp; Final Year CSIT Project
+          <td style="background:#1e293b;padding:14px 32px;text-align:center;">
+            <span style="color:rgba(255,255,255,0.45);font-size:11px;">
+              &copy; ${new Date().getFullYear()} AgroPrice Prediction Nepal
             </span>
           </td>
         </tr>
+
       </table>
     </td></tr>
   </table>
@@ -411,9 +441,9 @@ export async function sendSubscriptionWelcomeEmail(opts: {
 </html>`;
 
   await getTransporter().sendMail({
-    from: `"AgroPredict Nepal" <${env.smtp.from}>`,
+    from: `"AgroPrice Prediction" <${env.smtp.from}>`,
     to: opts.toEmail,
-    subject: `AgroPredict Nepal — You have subscribed to daily price updates`,
+    subject: `You have subscribed to AgroPrice Prediction — daily price updates active`,
     html,
   });
 }

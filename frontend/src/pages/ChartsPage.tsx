@@ -301,7 +301,39 @@ export default function ChartsPage() {
           </div>
         )}
 
-        {/* ── SECTION 4: WEATHER 14 DAYS ───────────────────── */}
+        {/* ── SECTION 4: RECENT CROP PRICES TABLE ─────────── */}
+        {(dash?.historical_30d ?? []).length > 0 && (
+          <div className="agro-card cp-card">
+            <SectionHeader
+              label={`Recent Prices — ${item}`}
+              sub="Last 10 days · Kalimati Market actual prices (NPR/KG)"
+            />
+            <div style={{ overflowX: "auto" }}>
+              <table className="agro-data-table" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Min Price</th>
+                    <th>Avg Price</th>
+                    <th>Max Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dash?.historical_30d ?? []).slice(-10).reverse().map((row, i) => (
+                    <tr key={i}>
+                      <td>{fmtDay(row.date)}</td>
+                      <td>Rs. {row.min_price.toFixed(0)}</td>
+                      <td style={{ fontWeight: 600 }}>Rs. {row.avg_price.toFixed(0)}</td>
+                      <td>Rs. {row.max_price.toFixed(0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── SECTION 6: WEATHER 14 DAYS ───────────────────── */}
         {weatherChartData.length > 0 && (
           <div className="agro-card cp-card">
             <SectionHeader
@@ -352,7 +384,7 @@ export default function ChartsPage() {
           </div>
         )}
 
-        {/* ── SECTION 5: FUEL PRICES 14 DAYS ──────────────── */}
+        {/* ── SECTION 7: FUEL PRICES 14 DAYS ──────────────── */}
         {fuelChartData.length > 0 && (
           <div className="agro-card cp-card">
             <SectionHeader
@@ -404,7 +436,7 @@ export default function ChartsPage() {
       </main>
 
       <footer className="agro-footer">
-        AgroPredict Nepal | Agricultural Price Prediction System | Final Year CSIT Project
+        AgroPredict Nepal &nbsp;·&nbsp; Kalimati Market Data
       </footer>
     </div>
   );

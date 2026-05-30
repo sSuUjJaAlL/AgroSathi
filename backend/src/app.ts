@@ -15,6 +15,7 @@ import { predictionRouter } from "./modules/prediction/prediction.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { pipelineRouter } from "./modules/pipeline/pipeline.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
+import { verifySmtp } from "./services/email.service.js";
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -51,6 +52,7 @@ app.use(errorHandler);
 const server = app.listen(env.port, () => {
   console.log(`Backend listening on http://localhost:${env.port}`);
   console.log("Connecting to MongoDB (retries in background). Check MONGODB_URI in .env.");
+  void verifySmtp();
   startMongoConnectionLoop(() => {
     void ensureIndexes();
     registerCronJobs();

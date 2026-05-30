@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Bell, Check, Loader2 } from "lucide-react";
 import { fetchFeaturedCrops, getCropPreferences, setCropPreferences } from "../services/api";
@@ -95,7 +95,7 @@ export default function CropPreferencesPage() {
           {loading ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#6b7280", padding: "24px 0" }}>
               <Loader2 size={18} className="agro-pipeline-spinner" />
-              Loading crops…
+              Loading cropsâ€¦
             </div>
           ) : (
             <>
@@ -163,7 +163,7 @@ export default function CropPreferencesPage() {
                 >
                   {saving ? (
                     <>
-                      <Loader2 size={16} className="agro-pipeline-spinner" /> Saving…
+                      <Loader2 size={16} className="agro-pipeline-spinner" /> Savingâ€¦
                     </>
                   ) : (
                     "Save Preferences"
@@ -178,7 +178,7 @@ export default function CropPreferencesPage() {
 
               {selected.size === 0 && (
                 <p className="muted-agro" style={{ marginTop: 12, fontSize: 13 }}>
-                  No crops selected — you will receive alerts for all crops.
+                  No crops selected â€” you will receive alerts for all crops.
                 </p>
               )}
               {selected.size > 0 && (
@@ -192,7 +192,7 @@ export default function CropPreferencesPage() {
       </main>
 
       <footer className="agro-footer">
-        AgroPredict Nepal | Agricultural Price Prediction System | Final Year CSIT Project
+        AgroPredict Nepal · Kalimati Market Data
       </footer>
     </div>
   );
