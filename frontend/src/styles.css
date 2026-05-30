@@ -1868,6 +1868,144 @@ a:hover {
 .reports-vs-avg.low  { background: #d8f3dc; color: #1b4332; }
 .reports-vs-avg.mid  { background: #e2e8f0; color: #475569; }
 
+/* ── Brand tagline ──────────────────────────────────────────── */
+
+.agro-brand-tagline {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.01em;
+  margin-top: 2px;
+}
+
+/* ── Crop selector bar ──────────────────────────────────────── */
+
+.agro-crop-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.agro-crop-bar-left {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.agro-crop-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.agro-crop-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.agro-crop-select {
+  min-width: 200px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.agro-crop-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Metric cards (flat, no icon) ───────────────────────────── */
+
+.agro-metric-card--flat {
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 1.2rem;
+}
+
+/* ── Tab navigation ─────────────────────────────────────────── */
+
+.agro-tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1.25rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.agro-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.agro-tab-btn:hover {
+  color: #2d6a4f;
+}
+
+.agro-tab-btn.active {
+  color: #1b4332;
+  border-bottom-color: #2d6a4f;
+}
+
+.agro-tab-content {
+  animation: rise 0.3s ease both;
+}
+
+/* ── Context tab grid ───────────────────────────────────────── */
+
+.agro-context-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 700px) {
+  .agro-context-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Section title (inside cards) ───────────────────────────── */
+
+.agro-section-title {
+  margin: 0 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+/* ── Band pills for trend signals ───────────────────────────── */
+
+.agro-band-red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.agro-band-green {
+  background: #d8f3dc;
+  color: #1b4332;
+}
+.agro-band-muted {
+  background: #f1f5f9;
+  color: #475569;
+}
+
 .agro-footer {
   background: #1e293b;
   color: rgba(255, 255, 255, 0.88);
