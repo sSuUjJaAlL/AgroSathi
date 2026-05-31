@@ -113,7 +113,13 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
     if not force:
         cached = load_preprocessed_features()
         if cached is not None:
-            return cached
+            _train, _full, _meta = cached
+            # Invalidate cache if new feature/target columns are missing
+            required_new = ["price_change_1d", "price_change_7d", "target_1d"]
+            if all(c in _full.columns for c in required_new):
+                return cached
+            print("[ML] Cache missing new columns — recomputing.")
+
 
     crops, weather, fuel = load_raw_frames()
     meta: dict = {"imputed_cells": 0, "notes": []}
@@ -215,7 +221,19 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
         lambda s: s.rolling(7, min_periods=1).sum()
     )
 
+    # Momentum features — rate of change signals (help model detect rising/falling trends)
+    merged["price_change_1d"] = merged.groupby("item_name")["avg_price"].transform(
+        lambda s: s.pct_change(1).fillna(0) * 100
+    )
+    merged["price_change_7d"] = merged.groupby("item_name")["avg_price"].transform(
+        lambda s: s.pct_change(7).fillna(0) * 100
+    )
+
     merged["target_next"] = merged.groupby("item_name")["avg_price"].shift(-1)
+
+    # Direct multi-step targets for horizon forecasting (no recursive compounding)
+    for h in range(1, 31):
+        merged[f"target_{h}d"] = merged.groupby("item_name")["avg_price"].shift(-h)
 
     full = merged.dropna(subset=["lag_1_price", "lag_7_price", "moving_avg_7", "moving_avg_30"])
     train_df = full.dropna(subset=["target_next"])
@@ -238,6 +256,8 @@ FEATURE_COLUMNS = [
     "moving_avg_7",
     "moving_avg_30",
     "price_std_30",
+    "price_change_1d",
+    "price_change_7d",
     "temperature",
     "rainfall",
     "humidity",
