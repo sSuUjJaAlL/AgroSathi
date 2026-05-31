@@ -231,9 +231,13 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
 
     merged["target_next"] = merged.groupby("item_name")["avg_price"].shift(-1)
 
-    # Direct multi-step targets for horizon forecasting (no recursive compounding)
+    # Relative change targets: fractional change from current price
+    # Fixes mean-reversion bias — model predicts % change, not absolute price
+    # At inference: predicted_price = current_actual_price * (1 + predicted_change)
+    current_price_clipped = merged["avg_price"].clip(lower=1.0)
     for h in range(1, 31):
-        merged[f"target_{h}d"] = merged.groupby("item_name")["avg_price"].shift(-h)
+        future_price = merged.groupby("item_name")["avg_price"].shift(-h)
+        merged[f"target_{h}d"] = (future_price / current_price_clipped) - 1.0
 
     full = merged.dropna(subset=["lag_1_price", "lag_7_price", "moving_avg_7", "moving_avg_30"])
     train_df = full.dropna(subset=["target_next"])

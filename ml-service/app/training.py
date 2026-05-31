@@ -121,26 +121,45 @@ def run_training(force: bool = False) -> dict:
     Y_train_7d = train_7d[target_cols_7d].values
     X_val_7d = val_7d[FEATURE_COLUMNS].values
     Y_val_7d = val_7d[target_cols_7d].values
+    # Keep val avg_price to convert relative predictions back to absolute for MAPE
+    val_prices_7d = val_7d["avg_price"].values.reshape(-1, 1)
+    val_prices_30d = val_30d["avg_price"].values.reshape(-1, 1)
 
     X_train_30d = train_30d[FEATURE_COLUMNS].values
     Y_train_30d = train_30d[target_cols_30d].values
     X_val_30d = val_30d[FEATURE_COLUMNS].values
     Y_val_30d = val_30d[target_cols_30d].values
 
+    # Recency weights: exponential decay, 180-day half-life
+    # Model calibrates better to current price regime
+    max_date = pd.to_datetime(train_7d["date"].max())
+    days_ago_7d = (max_date - pd.to_datetime(train_7d["date"])).dt.days.values
+    weights_7d = np.exp(-days_ago_7d / 180.0)
+
+    max_date_30 = pd.to_datetime(train_30d["date"].max())
+    days_ago_30d = (max_date_30 - pd.to_datetime(train_30d["date"])).dt.days.values
+    weights_30d = np.exp(-days_ago_30d / 180.0)
+
     # Direct multi-output models — one predict call per item, no recursive compounding
+    # Targets are fractional changes → prediction anchored to current actual price at inference
     print("[ML] Training 7d direct model...")
     model_7d = _make_pipeline()
-    model_7d.fit(X_train_7d, Y_train_7d)
+    model_7d.fit(X_train_7d, Y_train_7d, rf__sample_weight=weights_7d)
     Y_hat_7d = model_7d.predict(X_val_7d)
-    mape_7d = safe_mape(Y_val_7d, Y_hat_7d)
+    # Convert relative predictions → absolute prices for MAPE (meaningful accuracy %)
+    Y_val_abs_7d = val_prices_7d * (1.0 + Y_val_7d)
+    Y_hat_abs_7d = val_prices_7d * (1.0 + Y_hat_7d)
+    mape_7d = safe_mape(Y_val_abs_7d, Y_hat_abs_7d)
     accuracy_7d = float(max(0.0, min(100.0, 100.0 * (1.0 - mape_7d))))
     print(f"[ML] 7d accuracy: {accuracy_7d:.1f}% (MAPE {mape_7d:.4f})")
 
     print("[ML] Training 30d direct model...")
     model_30d = _make_pipeline()
-    model_30d.fit(X_train_30d, Y_train_30d)
+    model_30d.fit(X_train_30d, Y_train_30d, rf__sample_weight=weights_30d)
     Y_hat_30d = model_30d.predict(X_val_30d)
-    mape_30d = safe_mape(Y_val_30d, Y_hat_30d)
+    Y_val_abs_30d = val_prices_30d * (1.0 + Y_val_30d)
+    Y_hat_abs_30d = val_prices_30d * (1.0 + Y_hat_30d)
+    mape_30d = safe_mape(Y_val_abs_30d, Y_hat_abs_30d)
     accuracy_30d = float(max(0.0, min(100.0, 100.0 * (1.0 - mape_30d))))
     print(f"[ML] 30d accuracy: {accuracy_30d:.1f}% (MAPE {mape_30d:.4f})")
 
@@ -193,8 +212,9 @@ def run_training(force: bool = False) -> dict:
             if len(val_ix) > 5:
                 Xv = df_7d.iloc[val_ix][FEATURE_COLUMNS].to_numpy()
                 Yv = df_7d.iloc[val_ix][target_cols_7d].to_numpy()
+                pv = df_7d.iloc[val_ix]["avg_price"].values.reshape(-1, 1)
                 Ypv = model_7d.predict(Xv)
-                mape_item = safe_mape(Yv, Ypv)
+                mape_item = safe_mape(pv * (1.0 + Yv), pv * (1.0 + Ypv))
                 acc_item = float(max(0.0, min(100.0, 100.0 * (1.0 - mape_item))))
             else:
                 acc_item = accuracy_7d
@@ -203,10 +223,14 @@ def run_training(force: bool = False) -> dict:
 
         conf, reason = build_reason(acc_item, meta["imputed_cells"], fuel_std, rain_std)
 
-        # Single predict call — direct forecast, no recursive error compounding
+        # Single predict call — model returns fractional changes from current price
+        # Anchors predictions to today's actual price, eliminates mean-reversion bias
+        current_price = float(hist[-1])
         X_last = np.array([[last[c] for c in FEATURE_COLUMNS]])
-        preds7: np.ndarray = model_7d.predict(X_last)[0]   # shape (7,)
-        preds30: np.ndarray = model_30d.predict(X_last)[0]  # shape (30,)
+        changes_7d: np.ndarray = model_7d.predict(X_last)[0]   # shape (7,) — fractional
+        changes_30d: np.ndarray = model_30d.predict(X_last)[0]  # shape (30,)
+        preds7 = [current_price * (1.0 + float(c)) for c in changes_7d]
+        preds30 = [current_price * (1.0 + float(c)) for c in changes_30d]
 
         for i, price in enumerate(preds7):
             docs.append({
@@ -222,9 +246,8 @@ def run_training(force: bool = False) -> dict:
                 "algorithm": "random_forest",
             })
 
-        current_p = float(hist[-1])
         future_p = float(preds30[-1])
-        rel = (future_p - current_p) / max(current_p, 1e-6)
+        rel = (future_p - current_price) / max(current_price, 1e-6)
         trend = "Increasing" if rel > 0.02 else ("Decreasing" if rel < -0.02 else "Stable")
 
         for i, price in enumerate(preds30):
