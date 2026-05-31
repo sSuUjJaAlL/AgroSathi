@@ -8,7 +8,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_percentage_error
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
 from .preprocessing import FEATURE_COLUMNS, get_mongo_db, merge_feature_frame
@@ -128,12 +130,11 @@ def run_training(force: bool = False) -> dict:
     X_val = val_df[FEATURE_COLUMNS].values
     y_val = val_df["target_next"].values
 
-    model = RandomForestRegressor(
-        n_estimators=200,
-        max_depth=None,
-        random_state=42,
-        n_jobs=-1,
-    )
+    # sklearn Pipeline (algorithm 3): imputer fit on X_train only → no val data leakage
+    model = Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("rf", RandomForestRegressor(n_estimators=200, max_depth=None, random_state=42, n_jobs=-1)),
+    ])
     model.fit(X_train, y_train)
     y_hat = model.predict(X_val)
     mape = safe_mape(y_val, y_hat)

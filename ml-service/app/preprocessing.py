@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 import numpy as np
 import pandas as pd
 from pymongo import MongoClient
+from sklearn.impute import KNNImputer
+from sklearn.preprocessing import MinMaxScaler
 
 
 def db_name_from_uri(uri: str) -> str:
@@ -35,6 +37,18 @@ def _coerce_record(r: dict) -> dict:
         else:
             out[k] = v
     return out
+
+
+def remove_iqr_outliers(df: pd.DataFrame, col: str = "avg_price", multiplier: float = 1.5) -> pd.DataFrame:
+    def _iqr_mask(s: pd.Series) -> pd.Series:
+        q1, q3 = s.quantile(0.25), s.quantile(0.75)
+        iqr = q3 - q1
+        return (s >= q1 - multiplier * iqr) & (s <= q3 + multiplier * iqr)
+    mask = df.groupby("item_name")[col].transform(_iqr_mask)
+    n_removed = int((~mask).sum())
+    if n_removed > 0:
+        print(f"[ML] IQR outlier removal: dropped {n_removed} rows ({col}).")
+    return df[mask].reset_index(drop=True)
 
 
 def store_preprocessed_features(full: pd.DataFrame, meta: dict) -> None:
@@ -109,6 +123,11 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
 
     crops["date"] = pd.to_datetime(crops["date"]).dt.normalize()
 
+    # IQR outlier removal per crop (algorithm 1)
+    before_iqr = len(crops)
+    crops = remove_iqr_outliers(crops, col="avg_price", multiplier=1.5)
+    meta["iqr_removed"] = before_iqr - len(crops)
+
     weather_cols = {"date", "temperature", "rainfall", "humidity"}
     if weather.empty or not weather_cols.issubset(set(weather.columns)):
         w = pd.DataFrame(columns=["date", "temperature", "rainfall", "humidity"])
@@ -129,23 +148,35 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
     merged = crops.merge(w, on="date", how="left")
     merged = merged.merge(f, on="date", how="left")
 
-    # Forward-fill fuel and weather gaps
-    before = merged[["temperature", "rainfall", "humidity", "diesel_price"]].isna().sum().sum()
-    for col in ["temperature", "rainfall", "humidity", "diesel_price"]:
-        merged[col] = merged.groupby("item_name")[col].transform(lambda s: s.ffill().bfill())
-    after_fill = merged[["temperature", "rainfall", "humidity", "diesel_price"]].isna().sum().sum()
-    meta["imputed_cells"] = int(before - after_fill)
-    if after_fill > 0:
-        merged[["temperature", "rainfall", "humidity", "diesel_price"]] = merged[
-            ["temperature", "rainfall", "humidity", "diesel_price"]
-        ].fillna(merged[["temperature", "rainfall", "humidity", "diesel_price"]].median())
-        meta["notes"].append("Residual missing values filled with global median.")
-
     merged = merged.sort_values(["item_name", "date"])
 
-    # Basic features
+    # Extract temporal features before imputation (needed as KNN anchors)
     merged["day"] = merged["date"].dt.day
     merged["month"] = merged["date"].dt.month
+
+    # KNN imputation for weather/fuel gaps (algorithm 2)
+    # Uses avg_price + month + day as distance anchors, scaled to [0,1] so price doesn't dominate
+    impute_cols = ["temperature", "rainfall", "humidity", "diesel_price"]
+    before_knn = int(merged[impute_cols].isna().sum().sum())
+    if before_knn > 0:
+        knn_cols = ["avg_price", "month", "day"] + impute_cols
+        scaler = MinMaxScaler()
+        scaled = scaler.fit_transform(merged[knn_cols])
+        knn_imp = KNNImputer(n_neighbors=5)
+        imputed_scaled = knn_imp.fit_transform(scaled)
+        imputed_orig = scaler.inverse_transform(imputed_scaled)
+        imputed_df = pd.DataFrame(imputed_orig, columns=knn_cols, index=merged.index)
+        for col in impute_cols:
+            merged[col] = imputed_df[col]
+        after_knn = int(merged[impute_cols].isna().sum().sum())
+        meta["imputed_cells"] = before_knn - after_knn
+        if after_knn > 0:
+            # Fallback: median for any edge cases KNN couldn't resolve
+            for col in impute_cols:
+                merged[col] = merged[col].fillna(merged[col].median())
+            meta["notes"].append("Residual missing values filled with global median after KNN.")
+    else:
+        meta["imputed_cells"] = 0
 
     # Cyclical month encoding
     merged["month_sin"] = np.sin(2 * np.pi * merged["month"] / 12)
