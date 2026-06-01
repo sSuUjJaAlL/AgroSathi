@@ -18,7 +18,12 @@ def db_name_from_uri(uri: str) -> str:
 
 def get_mongo_db():
     uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017/agri_price_nepal")
-    client = MongoClient(uri)
+    client = MongoClient(
+        uri,
+        serverSelectionTimeoutMS=60_000,
+        connectTimeoutMS=60_000,
+        socketTimeoutMS=600_000,  # 10 min — allows large reads/writes on Atlas
+    )
     return client[db_name_from_uri(uri)]
 
 
@@ -56,7 +61,9 @@ def store_preprocessed_features(full: pd.DataFrame, meta: dict) -> None:
     records = [_coerce_record(r) for r in full.to_dict("records")]
     db["preprocessed_features"].drop()
     if records:
-        db["preprocessed_features"].insert_many(records)
+        chunk = 5_000
+        for i in range(0, len(records), chunk):
+            db["preprocessed_features"].insert_many(records[i : i + chunk])
     db["preprocessed_meta"].replace_one(
         {"_id": "latest"},
         {"_id": "latest", "computed_at": datetime.utcnow(), "row_count": len(records), "meta": meta},
@@ -90,7 +97,10 @@ def load_raw_frames():
     db = get_mongo_db()
     cutoff = pd.Timestamp("2017-01-01")
 
-    crops_raw = list(db["crop_prices"].find({"isOutlier": {"$ne": True}}, {"_id": 0}))
+    crops_raw = list(db["crop_prices"].find(
+        {"isOutlier": {"$ne": True}},
+        {"_id": 0, "date": 1, "item_name": 1, "avg_price": 1, "min_price": 1, "max_price": 1},
+    ))
     crops = pd.DataFrame(crops_raw)
     if not crops.empty and "date" in crops.columns:
         crops["date"] = pd.to_datetime(crops["date"]).dt.normalize()
