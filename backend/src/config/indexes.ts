@@ -1,4 +1,4 @@
-import { CropPrice } from "../models/CropPrice.js";
+import { KalimatiPrice } from "../models/KalimatiPrice.js";
 import { WeatherData } from "../models/WeatherData.js";
 import { Prediction } from "../models/Prediction.js";
 import { Notification } from "../models/Notification.js";
@@ -7,7 +7,7 @@ import { FuelPrice } from "../models/FuelPrice.js";
 export async function ensureIndexes(): Promise<void> {
   try {
     await Promise.all([
-      CropPrice.syncIndexes(),
+      KalimatiPrice.syncIndexes(),
       WeatherData.syncIndexes(),
       Prediction.syncIndexes(),
       Notification.syncIndexes(),

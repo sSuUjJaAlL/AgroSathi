@@ -1,13 +1,15 @@
 import type { Request, Response } from "express";
 import { DashboardService } from "./dashboard.service.js";
 import { getCached, setCached } from "../../utils/simpleCache.js";
+import { resolveSelectedCrop } from "../../config/selectedCrops.js";
 
 export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   get = async (req: Request, res: Response): Promise<void> => {
     const started = Date.now();
-    const item = decodeURIComponent(req.params.item || "");
+    const raw = decodeURIComponent(req.params.item || "");
+    const item = resolveSelectedCrop(raw) ?? raw;
     const cacheKey = `dashboard:${item}`;
     const cached = getCached<unknown>(cacheKey);
     if (cached) {

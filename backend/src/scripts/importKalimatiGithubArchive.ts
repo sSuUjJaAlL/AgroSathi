@@ -13,8 +13,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import axios from "axios";
 import { connectDatabase } from "../config/database.js";
-import { CropPrice } from "../models/CropPrice.js";
+import { CropPrice as CropPriceDomain } from "../domain/CropPrice.js";
+import { KalimatiPrice } from "../models/KalimatiPrice.js";
 import { canonicalSelectedCropName } from "../config/selectedCrops.js";
+import { parseKalimatiCsvByHeader } from "../scraper/kalimatiParseUtils.js";
+
+const cropDomain = new CropPriceDomain();
 
 const RAW_BASE =
   "https://raw.githubusercontent.com/ErKiran/kalimati/master/data/csv";
@@ -49,27 +53,6 @@ function parseArgs(): { from: Date; to: Date } {
   return { from, to };
 }
 
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let q = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') {
-      q = !q;
-      continue;
-    }
-    if (!q && c === ",") {
-      out.push(cur.trim());
-      cur = "";
-      continue;
-    }
-    cur += c;
-  }
-  out.push(cur.trim());
-  return out;
-}
-
 async function fetchDayCsv(iso: string): Promise<string | null> {
   const [y, m, d] = iso.split("-").map(Number);
   const url = `${RAW_BASE}/${y}/${pad(m)}/${pad(d)}.csv`;
@@ -86,51 +69,39 @@ async function fetchDayCsv(iso: string): Promise<string | null> {
   }
 }
 
-type CropUpsertOp = {
-  updateOne: {
-    filter: { date: Date; item_name: string };
-    update: { $set: { date: Date; item_name: string; min_price: number; max_price: number; avg_price: number } };
-    upsert: boolean;
-  };
+type CropRow = {
+  date: Date;
+  item_name: string;
+  min_price: number;
+  max_price: number;
+  avg_price: number;
 };
 
-function archiveCsvToBulkOps(raw: string): CropUpsertOp[] {
-  const lines = raw.split(/\r?\n/).filter((l) => l.trim());
-  const header = lines[0]?.toLowerCase() || "";
-  if (!header.includes("product") || !header.includes("avg")) return [];
-
-  const ops: CropUpsertOp[] = [];
-  for (let li = 1; li < lines.length; li++) {
-    const cols = parseCsvLine(lines[li]);
-    if (cols.length < 6) continue;
-    const date = new Date(cols[0] + "T12:00:00.000Z");
-    const item_name = cols[1];
-    const canonical = canonicalSelectedCropName(item_name);
-    const max_price = Number.parseFloat(cols[3]);
-    const min_price = Number.parseFloat(cols[4]);
-    const avg_price = Number.parseFloat(cols[5]);
-    if (!canonical || !Number.isFinite(min_price) || !Number.isFinite(max_price) || !Number.isFinite(avg_price)) {
-      continue;
-    }
-    ops.push({
-      updateOne: {
-        filter: { date, item_name: canonical },
-        update: { $set: { date, item_name: canonical, min_price, max_price, avg_price } },
-        upsert: true,
-      },
+function archiveCsvToRows(raw: string, iso: string): CropRow[] {
+  const parsed = parseKalimatiCsvByHeader(raw);
+  const rows: CropRow[] = [];
+  const date = new Date(`${iso}T12:00:00.000Z`);
+  for (const p of parsed) {
+    const canonical = canonicalSelectedCropName(p.product);
+    if (!canonical) continue;
+    rows.push({
+      date,
+      item_name: canonical,
+      min_price: p.min,
+      max_price: p.max,
+      avg_price: p.avg,
     });
   }
-  return ops;
+  return rows;
 }
 
 /** Upsert one calendar day from the GitHub raw CSV (real bulletin-aligned mirror). Returns row count, or 0 if missing. */
 export async function upsertKalimatiGithubArchiveDay(iso: string): Promise<number> {
   const raw = await fetchDayCsv(iso);
   if (!raw) return 0;
-  const ops = archiveCsvToBulkOps(raw);
-  if (!ops.length) return 0;
-  await CropPrice.bulkWrite(ops);
-  return ops.length;
+  const rows = archiveCsvToRows(raw, iso);
+  if (!rows.length) return 0;
+  return cropDomain.upsertMany(rows);
 }
 
 /**
@@ -161,10 +132,9 @@ export async function importKalimatiGithubArchiveRange(from: Date, to: Date): Pr
     const iso = cursor.toISOString().slice(0, 10);
     const raw = await fetchDayCsv(iso);
     if (raw) {
-      const ops = archiveCsvToBulkOps(raw);
-      if (ops.length) {
-        await CropPrice.bulkWrite(ops);
-        totalRows += ops.length;
+      const rows = archiveCsvToRows(raw, iso);
+      if (rows.length) {
+        totalRows += await cropDomain.upsertMany(rows);
         daysOk++;
       }
     }
@@ -176,10 +146,10 @@ export async function importKalimatiGithubArchiveRange(from: Date, to: Date): Pr
 }
 
 /**
- * Incremental import: starts from day after the latest crop_prices date.
+ * Incremental import: starts from day after the latest kalimati_prices date.
  */
 export async function importKalimatiGithubArchiveMissingRange(from: Date, to: Date): Promise<{ days: number; rows: number; skipped: boolean }> {
-  const latest = await CropPrice.findOne().sort({ date: -1 }).select("date").lean();
+  const latest = await KalimatiPrice.findOne().sort({ date: -1 }).select("date").lean();
   if (latest?.date) {
     const next = new Date(latest.date);
     next.setUTCHours(12, 0, 0, 0);

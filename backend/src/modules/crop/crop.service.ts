@@ -24,9 +24,7 @@ export class CropService {
   }
 
   async listFeaturedItems(): Promise<string[]> {
-    const items = await this.repo.listDistinctItems();
-    const available = new Set(items);
-    return [...SELECTED_CROPS].filter((c) => available.has(c));
+    return [...SELECTED_CROPS];
   }
 
   async getCurrentForItem(itemName: string) {

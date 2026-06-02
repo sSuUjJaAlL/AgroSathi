@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.impute import SimpleImputer
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.metrics import mean_absolute_percentage_error
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
-from .preprocessing import FEATURE_COLUMNS, SELECTED_CROPS, get_mongo_db, merge_feature_frame
+from .preprocessing import FEATURE_COLUMNS, SELECTED_CROPS, get_mongo_db, get_source_fingerprint, merge_feature_frame
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "model" / "model.pkl"
 
@@ -64,7 +65,7 @@ def _make_pipeline() -> Pipeline:
     return Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
         ("rf", RandomForestRegressor(
-            n_estimators=300,
+            n_estimators=150,
             max_depth=12,
             min_samples_leaf=4,
             random_state=42,
@@ -73,7 +74,42 @@ def _make_pipeline() -> Pipeline:
     ])
 
 
+def _should_skip_training(db) -> bool:
+    """Skip expensive retraining if source data has not advanced since last RF batch."""
+    latest_pred = db["predictions"].find_one(
+        {"algorithm": "random_forest"},
+        {"date": 1},
+        sort=[("date", -1)],
+    )
+    if not latest_pred or not latest_pred.get("date"):
+        return False
+    latest_pred_date = pd.to_datetime(latest_pred["date"]).to_pydatetime()
+    fp = get_source_fingerprint(db)
+    source_dates = [
+        pd.to_datetime(v).to_pydatetime()
+        for v in [fp.get("crop_max_date"), fp.get("weather_max_date"), fp.get("fuel_max_date")]
+        if v
+    ]
+    if not source_dates:
+        return False
+    return latest_pred_date >= max(source_dates)
+
+
 def run_training(force: bool = False) -> dict:
+    db = get_mongo_db()
+    if not force and _should_skip_training(db):
+        latest_pred = db["predictions"].find_one(
+            {"algorithm": "random_forest"},
+            {"date": 1, "forecast_batch_id": 1},
+            sort=[("date", -1)],
+        )
+        return {
+            "skipped": True,
+            "reason": "No new source data since last RandomForest training.",
+            "latest_prediction_batch": latest_pred.get("forecast_batch_id") if latest_pred else None,
+            "latest_prediction_date": latest_pred.get("date").isoformat() if latest_pred and latest_pred.get("date") else None,
+        }
+
     merged, full, meta = merge_feature_frame(force=force)
     if not merged.empty and "date" in merged.columns:
         min_date = merged["date"].min()
@@ -157,6 +193,8 @@ def run_training(force: bool = False) -> dict:
     Y_hat_abs_7d = val_prices_7d * (1.0 + Y_hat_7d)
     mape_7d = safe_mape(Y_val_abs_7d, Y_hat_abs_7d)
     accuracy_7d = float(max(0.0, min(100.0, 100.0 * (1.0 - mape_7d))))
+    mae_7d = float(mean_absolute_error(Y_val_abs_7d.ravel(), Y_hat_abs_7d.ravel()))
+    rmse_7d = float(np.sqrt(mean_squared_error(Y_val_abs_7d.ravel(), Y_hat_abs_7d.ravel())))
     print(f"[ML] 7d accuracy: {accuracy_7d:.1f}% (MAPE {mape_7d:.4f})")
 
     print("[ML] Training 30d direct model...")
@@ -167,6 +205,8 @@ def run_training(force: bool = False) -> dict:
     Y_hat_abs_30d = val_prices_30d * (1.0 + Y_hat_30d)
     mape_30d = safe_mape(Y_val_abs_30d, Y_hat_abs_30d)
     accuracy_30d = float(max(0.0, min(100.0, 100.0 * (1.0 - mape_30d))))
+    mae_30d = float(mean_absolute_error(Y_val_abs_30d.ravel(), Y_hat_abs_30d.ravel()))
+    rmse_30d = float(np.sqrt(mean_squared_error(Y_val_abs_30d.ravel(), Y_hat_abs_30d.ravel())))
     print(f"[ML] 30d accuracy: {accuracy_30d:.1f}% (MAPE {mape_30d:.4f})")
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -183,8 +223,6 @@ def run_training(force: bool = False) -> dict:
         },
         MODEL_PATH,
     )
-
-    db = get_mongo_db()
 
     # Clear stale RF predictions before writing fresh batch
     db["predictions"].delete_many({"algorithm": "random_forest"})
@@ -282,6 +320,10 @@ def run_training(force: bool = False) -> dict:
         "accuracy_30d_pct": round(accuracy_30d, 2),
         "val_mape_7d": round(float(mape_7d), 4),
         "val_mape_30d": round(float(mape_30d), 4),
+        "mae_7d": round(mae_7d, 4),
+        "rmse_7d": round(rmse_7d, 4),
+        "mae_30d": round(mae_30d, 4),
+        "rmse_30d": round(rmse_30d, 4),
         "predictions_written": len(docs),
         "item_count": int(len(items)),
         "batches": {

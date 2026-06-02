@@ -1,5 +1,6 @@
-import { CropPrice } from "../../models/CropPrice.js";
+import { KalimatiPrice } from "../../models/KalimatiPrice.js";
 import { FuelPrice } from "../../models/FuelPrice.js";
+import { resolveSelectedCrop } from "../../config/selectedCrops.js";
 import { FuelRepository, type FuelDaySnapshot } from "./fuel.repository.js";
 
 export class FuelService {
@@ -31,9 +32,13 @@ export class FuelService {
 
   /** Pearson correlation between diesel price and avg_price for a crop. */
   async dieselCropCorrelation(crop: string): Promise<{ crop: string; correlation: number; interpretation: string }> {
-    const cropDocs = await CropPrice.find({ item_name: new RegExp(crop, "i") })
+    const canon = resolveSelectedCrop(crop);
+    if (!canon) {
+      return { crop, correlation: 0, interpretation: "Unknown commodity" };
+    }
+    const cropDocs = await KalimatiPrice.find({ commodityEnglish: canon })
       .sort({ date: 1 })
-      .select("date avg_price")
+      .select("date averagePrice")
       .lean();
     if (cropDocs.length < 30) {
       return { crop, correlation: 0, interpretation: "Insufficient data" };
@@ -58,7 +63,7 @@ export class FuelService {
       const diesel: number | null = dieselByDate.get(dateKey) ?? lastDiesel;
       if (diesel != null) {
         lastDiesel = diesel;
-        pairs.push({ crop: doc.avg_price, diesel });
+        pairs.push({ crop: doc.averagePrice, diesel });
       }
     }
 

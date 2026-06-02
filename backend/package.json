@@ -9,6 +9,7 @@
     "start": "node dist/app.js",
     "seed": "tsx src/scripts/seedHistorical.ts",
     "scrape-once": "tsx src/scripts/runScraperOnce.ts",
+    "rescrape:today": "tsx src/scripts/rescrapeKalimatiToday.ts",
     "import-csv": "tsx src/scripts/importCsv.ts",
     "restrict:crops": "tsx src/scripts/restrictToSelectedCrops.ts",
     "test:scrape": "tsx src/scripts/testKalimatiScrape.ts",
@@ -22,7 +23,9 @@
     "migrate:atlas": "tsx src/scripts/migrateToAtlas.ts",
     "seed:fuel": "tsx src/scripts/seedFuelPrices.ts",
     "backfill:5y:official": "tsx src/scripts/backfillFiveYearsOfficial.ts",
-    "backfill:5y:hybrid": "tsx src/scripts/backfillHybridFiveYears.ts"
+    "backfill:5y:hybrid": "tsx src/scripts/backfillHybridFiveYears.ts",
+    "rebuild:kalimati-prices": "tsx src/scripts/rebuildKalimatiPrices.ts",
+    "scrape:kalimati-official": "tsx src/scripts/scrapeKalimatiOfficialOnly.ts"
   },
   "dependencies": {
     "axios": "^1.7.7",

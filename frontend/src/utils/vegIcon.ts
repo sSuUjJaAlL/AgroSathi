@@ -13,6 +13,7 @@ export function veggieIcon(name: string): string {
   if (n.includes("ginger")) return "🫚";
   if (n.includes("spinach")) return "🍃";
   if (n.includes("apple")) return "🍎";
+  if (n.includes("lemon") || n.includes("lime")) return "🍋";
   if (n.includes("banana")) return "🍌";
   if (n.includes("chilli") || n.includes("chili")) return "🌶️";
   return "🥗";

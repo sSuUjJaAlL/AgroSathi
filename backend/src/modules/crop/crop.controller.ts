@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { CropService } from "./crop.service.js";
+import { resolveSelectedCrop } from "../../config/selectedCrops.js";
 
 function formatDate(value: Date | string): string {
   return new Date(value).toISOString().slice(0, 10);
@@ -41,7 +42,12 @@ export class CropController {
   };
 
   currentItem = async (req: Request, res: Response): Promise<void> => {
-    const item = decodeURIComponent(req.params.item || "");
+    const raw = decodeURIComponent(req.params.item || "");
+    const item = resolveSelectedCrop(raw);
+    if (!item) {
+      res.status(404).json({ message: "Commodity not in selected Kalimati list." });
+      return;
+    }
     const row = await this.service.getCurrentForItem(item);
     if (!row) {
       res.status(404).json({ message: "Item not found" });

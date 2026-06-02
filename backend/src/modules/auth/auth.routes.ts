@@ -5,10 +5,10 @@ import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { AuthRepository } from "./auth.repository.js";
 import { User } from "../../models/User.js";
-import { CropPrice } from "../../models/CropPrice.js";
+import { KalimatiPrice } from "../../models/KalimatiPrice.js";
 import { Prediction } from "../../models/Prediction.js";
 import { sendSubscriptionWelcomeEmail } from "../../services/email.service.js";
-import { SELECTED_CROPS } from "../../config/selectedCrops.js";
+import { SELECTED_CROPS, resolveSelectedCrop } from "../../config/selectedCrops.js";
 
 const repo = new AuthRepository();
 const service = new AuthService(repo);
@@ -23,7 +23,9 @@ authRouter.get("/me", authMiddleware, controller.me);
 authRouter.get("/preferences", authMiddleware, async (req: Request, res: Response): Promise<void> => {
   const user = await User.findOne({ email: req.user!.email }).select("cropPreferences").lean();
   const allowed = new Set([...SELECTED_CROPS]);
-  const filtered = (user?.cropPreferences ?? []).filter((c) => allowed.has(c as (typeof SELECTED_CROPS)[number]));
+  const filtered = (user?.cropPreferences ?? [])
+    .map((c) => resolveSelectedCrop(c))
+    .filter((c): c is (typeof SELECTED_CROPS)[number] => c != null && allowed.has(c));
   res.json({ cropPreferences: filtered });
 });
 
@@ -34,7 +36,9 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
     return;
   }
   const allowed = new Set([...SELECTED_CROPS]);
-  const filtered = (cropPreferences as string[]).filter((c) => allowed.has(c as (typeof SELECTED_CROPS)[number]));
+  const filtered = (cropPreferences as string[])
+    .map((c) => resolveSelectedCrop(c))
+    .filter((c): c is (typeof SELECTED_CROPS)[number] => c != null && allowed.has(c));
   await User.findOneAndUpdate({ email: req.user!.email }, { cropPreferences: filtered });
   res.json({ ok: true, cropPreferences: filtered });
 
@@ -44,15 +48,15 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
       try {
         const today = new Date();
         today.setUTCHours(0, 0, 0, 0);
-        const recent = await CropPrice.find(
-          { item_name: { $in: crops }, date: { $gte: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000) } },
-          { item_name: 1, avg_price: 1, date: 1 }
+        const recent = await KalimatiPrice.find(
+          { commodityEnglish: { $in: crops }, date: { $gte: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000) } },
+          { commodityEnglish: 1, averagePrice: 1, date: 1 }
         ).sort({ date: -1 }).lean();
 
         const todayPrices: Record<string, number> = {};
         for (const row of recent) {
-          if (!(row.item_name in todayPrices)) {
-            todayPrices[row.item_name] = row.avg_price;
+          if (!(row.commodityEnglish in todayPrices)) {
+            todayPrices[row.commodityEnglish] = row.averagePrice;
           }
         }
 

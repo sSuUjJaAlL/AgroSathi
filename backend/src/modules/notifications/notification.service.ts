@@ -1,5 +1,6 @@
 import { Notification } from "../../models/Notification.js";
-import { CropPrice } from "../../models/CropPrice.js";
+import { KalimatiPrice } from "../../models/KalimatiPrice.js";
+import { SELECTED_CROPS } from "../../config/selectedCrops.js";
 import { Prediction } from "../../models/Prediction.js";
 import { User } from "../../models/User.js";
 import { sseRegistry } from "./sse.registry.js";
@@ -30,14 +31,15 @@ async function getUsersByRole(role: UserRole): Promise<Array<{ email: string; cr
 }
 
 export async function checkAndGenerateNotifications(): Promise<{ created: number; emailsSent: number }> {
-  const items = await Prediction.distinct("item_name");
   let created = 0;
   let emailsSent = 0;
 
-  for (const item of items) {
-    const currentDoc = await CropPrice.findOne({ item_name: item }).sort({ date: -1 }).lean();
+  for (const item of SELECTED_CROPS) {
+    const currentDoc = await KalimatiPrice.findOne({ commodityEnglish: item })
+      .sort({ date: -1 })
+      .lean();
     if (!currentDoc) continue;
-    const currentPrice = currentDoc.avg_price;
+    const currentPrice = currentDoc.averagePrice;
 
     // 7-day forecast drop → notify buyers
     const preds7 = await latestBatchPredictions(item, "7d");
@@ -94,7 +96,7 @@ export async function checkAndGenerateNotifications(): Promise<{ created: number
     }
   }
 
-  console.log(`[Notifications] Created ${created} notification(s) across ${items.length} commodities.`);
+  console.log(`[Notifications] Created ${created} notification(s) across ${SELECTED_CROPS.length} commodities.`);
   return { created, emailsSent: 0 };
 }
 

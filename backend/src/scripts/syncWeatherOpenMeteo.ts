@@ -1,7 +1,7 @@
 /**
- * Fills weather_data from Open-Meteo historical archive for the date span of crop_prices in MongoDB.
+ * Fills weather_data from Open-Meteo historical archive for the date span of kalimati_prices in MongoDB.
  */
-import { CropPrice } from "../models/CropPrice.js";
+import { KalimatiPrice } from "../models/KalimatiPrice.js";
 import { WeatherData } from "../models/WeatherData.js";
 import { fetchHistoricalWeather, type DailyWeatherRow } from "../services/openMeteoWeather.js";
 
@@ -29,11 +29,11 @@ async function fetchWeatherChunked(startIso: string, endIso: string): Promise<Da
 }
 
 export async function syncWeatherForCropDateRange(): Promise<{ inserted: number; range: string }> {
-  const agg = await CropPrice.aggregate<{ _min: Date; _max: Date }>([
+  const agg = await KalimatiPrice.aggregate<{ _min: Date; _max: Date }>([
     { $group: { _id: null, _min: { $min: "$date" }, _max: { $max: "$date" } } },
   ]);
   if (!agg.length || !agg[0]._min || !agg[0]._max) {
-    return { inserted: 0, range: "(no crop_prices)" };
+    return { inserted: 0, range: "(no kalimati_prices)" };
   }
 
   const cropStart = toIsoDate(new Date(agg[0]._min));

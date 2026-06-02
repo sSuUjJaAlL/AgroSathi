@@ -1,17 +1,22 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import { canonicalSelectedCropName } from "../config/selectedCrops.js";
+import {
+  matchSelectedCropByLabel,
+  nepaliMatchScore,
+  type SelectedCrop,
+} from "../config/selectedCrops.js";
 
 export interface ScrapedRow {
-  item_name: string;
+  item_name: SelectedCrop;
   unit: string;
   min_price: number;
   max_price: number;
   avg_price: number;
+  /** Raw Nepali/English label from the price table (debug). */
+  source_label: string;
 }
 
 export interface KalimatiScrapeMeta {
-  /** Raw heading from the price page (often includes BS date). */
   listing_heading: string | null;
   fetched_at: string;
 }
@@ -21,134 +26,7 @@ export interface KalimatiScrapeResult {
   meta: KalimatiScrapeMeta;
 }
 
-const KALIMATI_PRICE_URL = "https://kalimatimarket.gov.np/price";
-
-/** Translates Nepali names (live site) → English names (CSV archive / historical DB). */
-const NEPALI_TO_ENGLISH: Record<string, string> = {
-  // Ginger
-  "अदुवा": "Ginger",
-  // Potato
-  "आलु रातो(लाम्चो)": "Potato Red",
-  "रातो आलु(गोलो)": "Potato Red",
-  "आलु रातो": "Potato Red",
-  "आलु सेतो": "Potato White",
-  // Tomato
-  "गोलभेडा ठूलो(नेपाली)": "Tomato Big(Nepali)",
-  "गोलभेडा ठूलो(भारतीय)": "Tomato Big(Indian)",
-  "गोलभेडा सानो(टनेल)": "Tomato Small(Tunnel)",
-  "गोलभेडा सानो(लोकल)": "Tomato Small(Local)",
-  "गोलभेडा सानो(भारतीय)": "Tomato Small(Indian)",
-  "गोलभेडा सानो(तराई)": "Tomato Small(Terai)",
-  "गोलभेडा": "Tomato Big(Nepali)",
-  // Onion
-  "प्याज सुकेको (भारतीय)": "Onion Dry (Indian)",
-  "प्याज सुकेको(भारतीय)": "Onion Dry (Indian)",
-  "प्याज सुकेको(चाइनिज)": "Onion Dry (Chinese)",
-  "प्याज सुकेको": "Onion Dry (Indian)",
-  "प्याज हरियो": "Onion Green",
-  // Cauliflower
-  "काउली स्थानिय": "Cauli Local",
-  "काउली स्थानिय(ज्यापु)": "Cauli Local(Jyapu)",
-  "काउली तराई": "Cauli Terai",
-  "काउली": "Cauli Local",
-  // Cabbage
-  "बन्दा(लोकल)": "Cabbage(Local)",
-  "बन्दा(तराई)": "Cabbage(Terai)",
-  "बन्दा": "Cabbage",
-  "रातो बन्दा": "Red Cabbbage",
-  // Garlic
-  "लसुन सुकेको चाइनिज": "Garlic Dry Chinese",
-  "लसुन सुकेको नेपाली": "Garlic Dry Nepali",
-  "लसुन हरियो": "Garlic Green",
-  "लसुन सुकेको": "Garlic Dry Chinese",
-  // Chilli
-  "खु्र्सानी सुकेको": "Chilli Dry",
-  "खुर्सानी सुकेको": "Chilli Dry",
-  "खुर्सानी हरियो(बुलेट)": "Chilli Green(Bullet)",
-  "खुर्सानी हरियो(माछे)": "Chilli Green(Machhe)",
-  "खुर्सानी हरियो(अकबरे)": "Chilli Green(Akbare)",
-  "खुर्सानी हरियो(लाम्चो)": "Chilli Green",
-  "खुर्सानी हरियो": "Chilli Green",
-  "भेडे खु्र्सानी": "Capsicum",
-  "भेडे खुर्सानी": "Capsicum",
-  // Carrot
-  "गाजर(लोकल)": "Carrot(Local)",
-  "गाजर(तराई)": "Carrot(Terai)",
-  "गाजर": "Carrot(Local)",
-  // Radish
-  "सेतो मूला(हाइब्रीड)": "Raddish White(Hybrid)",
-  "सेतो मूला(लोकल)": "Raddish White(Local)",
-  "रातो मूला": "Raddish Red",
-  "मूला": "Raddish White(Local)",
-  // Others
-  "केरा(नेपाली)": "Banana(Nepali)",
-  "केरा(मालभोग)": "Banana(Malbhog)",
-  "केरा": "Banana",
-  "स्याउ(फूजी)": "Apple(Fuji)",
-  "स्याउ(झोले)": "Apple(Jholey)",
-  "अनार": "Pomegranate",
-  "कागती": "Lime",
-  "लीच्ची(भारतीय)": "Litchi(Indian)",
-  "लीच्ची(लोकल)": "Litchi(Local)",
-  "मेवा(नेपाली)": "Papaya(Nepali)",
-  "मेवा(भारतीय)": "Papaya(Indian)",
-  "भन्टा लाम्चो": "Brinjal Long",
-  "भन्टा डल्लो": "Brinjal Round",
-  "तितो करेला": "Bitter Gourd",
-  "लौका": "Bottle Gourd",
-  "च्याउ(कन्य)": "Mushroom(Kanya)",
-  "च्याउ(डल्ले)": "Mushroom(Button)",
-  "राजा च्याउ": "Mushroom(Oyster)",
-  "सिताके च्याउ": "Mushroom(Shiitake)",
-  "गुन्दुक": "Gundruk",
-  "तोफु": "Tofu",
-  "तामा": "Bamboo Shoot",
-  "हरियो धनिया": "Coriander Green",
-  "पुदीना": "Mint",
-  "पार्सले": "Parseley",
-  "पालूगो साग": "Spinach Leaf",
-  "रायो साग": "Mustard Leaf",
-  "मेथीको साग": "Fenugreek Leaf",
-  "चमसूरको साग": "Cress Leaf",
-  "सौफको साग": "Fennel Leaf",
-  "जिरीको साग": "Coriander Green",
-  "सेलरी": "Celery",
-  "परवर(लोकल)": "Pointed Gourd(Terai)",
-  "घिरौला": "Squash(Long)",
-  "स्कूस": "Squash(Round)",
-  "घिउ सिमी(राजमा)": "French Bean(Rajma)",
-  "घिउ सिमी(लोकल)": "French Bean(Local)",
-  "घिउ सिमी(हाइब्रीड)": "French Bean(Hybrid)",
-  "मकै बोडी": "Cowpea(Short)",
-  "बोडी(तने)": "Sword Bean",
-  "मटरकोशा": "Green Peas",
-  "सखरखण्ड": "Sweet Potato",
-  "पिंडालू": "Arum",
-  "न्यूरो": "Asparagus",
-  "कुरीलो": "Asparagus",
-  "भिण्डी": "Okara",
-  "फर्सी पाकेको": "Pumpkin",
-  "फर्सी हरियो(लाम्चो)": "Squash(Long)",
-  "हरियो फर्सी(डल्लो)": "Pumpkin",
-  "चुकुन्दर": "Sugarbeet",
-  "इमली": "Tamarind",
-  "छ्यापी सुकेको": "Tamarind",
-  "तरबुजा(हरियो)": "Water Melon(Green)",
-  "रुख कटहर": "Jack Fruit",
-  "भुई कटहर": "Christophine",
-  "मकै(हरियो)": "Sweet Corn",
-  "सजिवन": "Drumstick",
-  "ताजा माछा(रहु)": "Fish Fresh(Rahu)",
-  "ताजा माछा(बचुवा)": "Fish Fresh(Bachuwa)",
-  "ताजा माछा(छडी)": "Fish Fresh(Chhadi)",
-  "ताजा माछा(मुंगरी)": "Fish Fresh(Mungari)",
-  "भटमासकोशा": "Soyabean Pod",
-};
-
-function translateName(name: string): string {
-  const trimmed = name.trim();
-  return NEPALI_TO_ENGLISH[trimmed] ?? trimmed;
-}
+export const KALIMATI_PRICE_URL = "https://kalimatimarket.gov.np/price";
 
 /** Devanagari digits → ASCII (Kalimati renders amounts like "रू ८०.००"). */
 const DEVANAGARI_DIGIT_MAP: Record<string, string> = {
@@ -180,6 +58,39 @@ export function parseMoney(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+type PriceColumnIndices = {
+  name: number;
+  unit: number;
+  min: number;
+  max: number;
+  avg: number;
+};
+
+function detectPriceColumns($: cheerio.CheerioAPI): PriceColumnIndices {
+  const headers: string[] = [];
+  $("#commodityPriceParticular")
+    .find("thead tr")
+    .last()
+    .find("th, td")
+    .each((_, el) => {
+      headers.push($(el).text().replace(/\s+/g, " ").trim().toLowerCase());
+    });
+
+  const findIdx = (pred: (h: string) => boolean, fallback: number): number => {
+    const i = headers.findIndex(pred);
+    return i >= 0 ? i : fallback;
+  };
+
+  // Official table: कृषि उपज | ईकाइ | न्यूनतम | अधिकतम | औसत
+  return {
+    name: findIdx((h) => /उपज|commodity|product|कृषि/.test(h), 0),
+    unit: findIdx((h) => /ईकाइ|unit/.test(h), 1),
+    min: findIdx((h) => /न्यून|minimum|\bmin\b/.test(h), 2),
+    max: findIdx((h) => /अधिक|maximum|\bmax\b/.test(h), 3),
+    avg: findIdx((h) => /औसत|average|\bavg\b/.test(h), 4),
+  };
+}
+
 function extractListingHeading($: cheerio.CheerioAPI): string | null {
   const t = $("h4.bottom-head").first().text().replace(/\s+/g, " ").trim();
   return t.length ? t : null;
@@ -187,42 +98,51 @@ function extractListingHeading($: cheerio.CheerioAPI): string | null {
 
 /**
  * Parses the official Kalimati daily price table (`#commodityPriceParticular`).
- * Columns: commodity (Nepali name), unit, min, max, average — prices use Nepali or ASCII digits.
+ * Uses thead to locate min / max / avg columns (not hard-coded offsets).
+ * Maps only the 8 selected commodities; does not merge unrelated potato varieties.
  */
 export function parseKalimatiHtml(html: string, fetchedAt = new Date().toISOString()): KalimatiScrapeResult {
   const $ = cheerio.load(html);
-  const rows: ScrapedRow[] = [];
-
   const table = $("#commodityPriceParticular");
   const bodyRows = table.length ? table.find("tbody tr") : $("table tbody tr");
+  const cols = table.length ? detectPriceColumns($) : { name: 0, unit: 1, min: 2, max: 3, avg: 4 };
+
+  const bestByCrop = new Map<SelectedCrop, ScrapedRow>();
 
   bodyRows.each((_, tr) => {
     const cells = $(tr).find("td");
-    if (cells.length < 5) return;
+    if (cells.length <= cols.avg) return;
 
-    const name = $(cells[0]).text().replace(/\s+/g, " ").trim();
-    const unit = $(cells[1]).text().replace(/\s+/g, " ").trim();
+    const name = $(cells[cols.name]).text().replace(/\s+/g, " ").trim();
+    const unit = $(cells[cols.unit]).text().replace(/\s+/g, " ").trim();
     if (!name || /^कृषि|^ईकाइ|^commodity|^unit$/i.test(name)) return;
 
-    const min = parseMoney($(cells[2]).text());
-    const max = parseMoney($(cells[3]).text());
-    const avg = parseMoney($(cells[4]).text());
+    const min = parseMoney($(cells[cols.min]).text());
+    const max = parseMoney($(cells[cols.max]).text());
+    const avg = parseMoney($(cells[cols.avg]).text());
     if (min == null || max == null || avg == null) return;
 
-    const canonical = canonicalSelectedCropName(translateName(name));
-    if (!canonical) return;
+    const crop = matchSelectedCropByLabel(name);
+    if (!crop) return;
 
-    rows.push({
-      item_name: canonical,
+    const row: ScrapedRow = {
+      item_name: crop,
       unit,
-      min_price: min,
-      max_price: max,
+      min_price: Math.min(min, max),
+      max_price: Math.max(min, max),
       avg_price: avg,
-    });
+      source_label: name,
+    };
+
+    const prev = bestByCrop.get(crop);
+    if (!prev || nepaliMatchScore(name, crop) > nepaliMatchScore(prev.source_label, crop)) {
+      bestByCrop.set(crop, row);
+    }
   });
 
+  const rows = [...bestByCrop.values()];
   return {
-    rows: dedupeByName(rows),
+    rows,
     meta: {
       listing_heading: extractListingHeading($),
       fetched_at: fetchedAt,
@@ -230,10 +150,24 @@ export function parseKalimatiHtml(html: string, fetchedAt = new Date().toISOStri
   };
 }
 
-function dedupeByName(rows: ScrapedRow[]): ScrapedRow[] {
-  const map = new Map<string, ScrapedRow>();
-  for (const r of rows) map.set(r.item_name, r);
-  return [...map.values()];
+let scrapeDebugLogged = false;
+
+/** Log first N scraped rows once per process (before Mongo upsert). */
+export function logScrapePreview(rows: ScrapedRow[], limit = 20): void {
+  if (scrapeDebugLogged || !rows.length) return;
+  scrapeDebugLogged = true;
+  console.log("[Kalimati] Scrape preview (first rows):");
+  for (const r of rows.slice(0, limit)) {
+    console.log(
+      JSON.stringify({
+        commodity: r.item_name,
+        source_label: r.source_label,
+        minimumPrice: r.min_price,
+        maximumPrice: r.max_price,
+        averagePrice: r.avg_price,
+      })
+    );
+  }
 }
 
 /** Class-based Kalimati scraper (class diagram: data ingestion). */
@@ -250,7 +184,9 @@ export class KalimatiScraper {
         },
         validateStatus: (s) => s >= 200 && s < 400,
       });
-      return parseKalimatiHtml(data, fetchedAt);
+      const result = parseKalimatiHtml(data, fetchedAt);
+      logScrapePreview(result.rows);
+      return result;
     } catch (e) {
       console.error("[Kalimati] scrape error:", e instanceof Error ? e.message : e);
       return { rows: [], meta: { listing_heading: null, fetched_at: fetchedAt } };
@@ -258,7 +194,7 @@ export class KalimatiScraper {
   }
 
   parseHtml(html: string, fetchedAt?: string): KalimatiScrapeResult {
-    return parseKalimatiHtml(html, fetchedAt);
+    return parseKalimatiHtml(html, fetchedAt ?? new Date().toISOString());
   }
 }
 

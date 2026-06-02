@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from datetime import datetime
@@ -11,35 +11,46 @@ from sklearn.impute import KNNImputer
 from sklearn.preprocessing import MinMaxScaler
 
 SELECTED_CROPS = [
-    "Tomato Small (Local)",
+    "Apple (Fuji)",
+    "Lemon",
     "Ginger",
-    "Cabbage (Local)",
-    "Dry Chilli",
-    "Garlic Dry Chinese",
     "Carrot (Local)",
-    "Potato Red",
-    "Onion Dry (Indian)",
+    "Garlic green",
+    "Dry chilli",
+    "Red potato (round)",
+    "Tomato small (local)",
 ]
 
 _ALIASES = {
-    "tomato small(local)": "Tomato Small (Local)",
-    "tomato small (local)": "Tomato Small (Local)",
+    "apple (fuji)": "Apple (Fuji)",
+    "apple(fuji)": "Apple (Fuji)",
+    "lemon": "Lemon",
+    "lime": "Lemon",
     "ginger": "Ginger",
-    "cabbage(local)": "Cabbage (Local)",
-    "cabbage (local)": "Cabbage (Local)",
-    "chilli dry": "Dry Chilli",
-    "dry chilli": "Dry Chilli",
-    "garlic dry chinese": "Garlic Dry Chinese",
-    "carrot(local)": "Carrot (Local)",
     "carrot (local)": "Carrot (Local)",
-    "potato red": "Potato Red",
-    "onion dry (indian)": "Onion Dry (Indian)",
-    "onion dry(indian)": "Onion Dry (Indian)",
+    "carrot(local)": "Carrot (Local)",
+    "garlic green": "Garlic green",
+    "garlicgreen": "Garlic green",
+    "dry chilli": "Dry chilli",
+    "dry chili": "Dry chilli",
+    "chilli dry": "Dry chilli",
+    "chili dry": "Dry chilli",
+    "red potato (round)": "Red potato (round)",
+    "potato red": "Red potato (round)",
+    "tomato small (local)": "Tomato small (local)",
+    "tomato small(local)": "Tomato small (local)",
+    "garlic dry chinese": "Garlic green",
 }
 
 
 def canonical_crop_name(name: str) -> str | None:
-    return _ALIASES.get(str(name).strip().lower())
+    key = str(name).strip().lower()
+    if key in _ALIASES:
+        return _ALIASES[key]
+    for crop in SELECTED_CROPS:
+        if crop.lower() == key:
+            return crop
+    return None
 
 
 def db_name_from_uri(uri: str) -> str:
@@ -53,9 +64,28 @@ def get_mongo_db():
         uri,
         serverSelectionTimeoutMS=60_000,
         connectTimeoutMS=60_000,
-        socketTimeoutMS=600_000,  # 10 min — allows large reads/writes on Atlas
+        socketTimeoutMS=600_000,  # 10 min ΓÇö allows large reads/writes on Atlas
     )
     return client[db_name_from_uri(uri)]
+
+
+def get_source_fingerprint(db=None) -> dict:
+    """Small signature of upstream data freshness; used to validate cache/training reuse."""
+    owns_db = db is None
+    if db is None:
+        db = get_mongo_db()
+    crop_tip = db["kalimati_prices"].find_one(
+        {"commodityEnglish": {"$in": SELECTED_CROPS}},
+        {"date": 1},
+        sort=[("date", -1)],
+    )
+    weather_tip = db["weather_data"].find_one({}, {"date": 1}, sort=[("date", -1)])
+    fuel_tip = db["fuel_prices"].find_one({"fuel_type": "diesel"}, {"date": 1}, sort=[("date", -1)])
+    return {
+        "crop_max_date": crop_tip["date"].isoformat() if crop_tip and crop_tip.get("date") else None,
+        "weather_max_date": weather_tip["date"].isoformat() if weather_tip and weather_tip.get("date") else None,
+        "fuel_max_date": fuel_tip["date"].isoformat() if fuel_tip and fuel_tip.get("date") else None,
+    }
 
 
 def _coerce_record(r: dict) -> dict:
@@ -128,12 +158,29 @@ def load_raw_frames():
     db = get_mongo_db()
     cutoff = pd.Timestamp("2017-01-01")
 
-    crops_raw = list(db["crop_prices"].find(
-        {"isOutlier": {"$ne": True}},
-        {"_id": 0, "date": 1, "item_name": 1, "avg_price": 1, "min_price": 1, "max_price": 1},
-    ))
+    crops_raw = list(
+        db["kalimati_prices"].find(
+            {"commodityEnglish": {"$in": SELECTED_CROPS}},
+            {
+                "_id": 0,
+                "date": 1,
+                "commodityEnglish": 1,
+                "averagePrice": 1,
+                "minimumPrice": 1,
+                "maximumPrice": 1,
+            },
+        )
+    )
     crops = pd.DataFrame(crops_raw)
     if not crops.empty and "date" in crops.columns:
+        crops = crops.rename(
+            columns={
+                "commodityEnglish": "item_name",
+                "averagePrice": "avg_price",
+                "minimumPrice": "min_price",
+                "maximumPrice": "max_price",
+            }
+        )
         crops["item_name"] = crops["item_name"].map(canonical_crop_name)
         crops = crops[crops["item_name"].notna()]
         crops["date"] = pd.to_datetime(crops["date"]).dt.normalize()
@@ -161,14 +208,14 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
             required_new = ["price_change_1d", "price_change_7d", "target_1d"]
             if all(c in _full.columns for c in required_new):
                 return cached
-            print("[ML] Cache missing new columns — recomputing.")
+            print("[ML] Cache missing new columns ΓÇö recomputing.")
 
 
     crops, weather, fuel = load_raw_frames()
     meta: dict = {"imputed_cells": 0, "notes": []}
 
     if crops.empty:
-        raise ValueError("No crop_prices in MongoDB. Seed historical data or run the scraper.")
+        raise ValueError("No kalimati_prices in MongoDB. Run rebuild:kalimati-prices or the daily pipeline.")
 
     crops["date"] = pd.to_datetime(crops["date"]).dt.normalize()
 
@@ -180,7 +227,7 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
     weather_cols = {"date", "temperature", "rainfall", "humidity"}
     if weather.empty or not weather_cols.issubset(set(weather.columns)):
         w = pd.DataFrame(columns=["date", "temperature", "rainfall", "humidity"])
-        meta["notes"].append("No weather_data — features imputed from crop series only.")
+        meta["notes"].append("No weather_data ΓÇö features imputed from crop series only.")
     else:
         weather = weather.copy()
         weather["date"] = pd.to_datetime(weather["date"]).dt.normalize()
@@ -188,7 +235,7 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
 
     if fuel.empty or "diesel_price" not in fuel.columns or "date" not in fuel.columns:
         f = pd.DataFrame(columns=["date", "diesel_price"])
-        meta["notes"].append("No fuel data — diesel feature imputed.")
+        meta["notes"].append("No fuel data ΓÇö diesel feature imputed.")
     else:
         fuel = fuel.copy()
         fuel["date"] = pd.to_datetime(fuel["date"]).dt.normalize()
@@ -256,7 +303,7 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
         lambda s: s.rolling(30, min_periods=1).mean()
     )
 
-    # Festival season flag (Dashain/Tihar: Oct–Nov)
+    # Festival season flag (Dashain/Tihar: OctΓÇôNov)
     merged["is_festival_season"] = merged["month"].isin([10, 11]).astype(int)
 
     # Weather rolling
@@ -264,7 +311,7 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
         lambda s: s.rolling(7, min_periods=1).sum()
     )
 
-    # Momentum features — rate of change signals (help model detect rising/falling trends)
+    # Momentum features ΓÇö rate of change signals (help model detect rising/falling trends)
     merged["price_change_1d"] = merged.groupby("item_name")["avg_price"].transform(
         lambda s: s.pct_change(1).fillna(0) * 100
     )
@@ -275,7 +322,7 @@ def merge_feature_frame(force: bool = False) -> tuple[pd.DataFrame, pd.DataFrame
     merged["target_next"] = merged.groupby("item_name")["avg_price"].shift(-1)
 
     # Relative change targets: fractional change from current price
-    # Fixes mean-reversion bias — model predicts % change, not absolute price
+    # Fixes mean-reversion bias ΓÇö model predicts % change, not absolute price
     # At inference: predicted_price = current_actual_price * (1 + predicted_change)
     current_price_clipped = merged["avg_price"].clip(lower=1.0)
     for h in range(1, 31):

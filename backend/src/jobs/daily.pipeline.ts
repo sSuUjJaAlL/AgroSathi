@@ -1,12 +1,11 @@
 import cron from "node-cron";
 import axios from "axios";
 import { env } from "../config/env.js";
-import { CropPrice } from "../models/CropPrice.js";
+import { KalimatiPrice } from "../models/KalimatiPrice.js";
 import { FuelPrice } from "../models/FuelPrice.js";
-import { scrapeKalimatiPrices } from "../scraper/kalimati.scraper.js";
+import { logScrapePreview, scrapeKalimatiPrices } from "../scraper/kalimati.scraper.js";
 import { CropRepository } from "../modules/crop/crop.repository.js";
 import { FuelRepository } from "../modules/fuel/fuel.repository.js";
-import { upsertLatestKalimatiGithubArchive } from "../scripts/importKalimatiGithubArchive.js";
 import { syncWeatherForCropDateRange } from "../scripts/syncWeatherOpenMeteo.js";
 import { scrapeNocCurrentPrices, nocFallbackPrices } from "../scraper/noc.scraper.js";
 import {
@@ -22,12 +21,13 @@ function todayUtcDate(): Date {
 
 export async function runDailyScrapeJob(): Promise<{ saved: number; message: string }> {
   const date = todayUtcDate();
-  const latestCrop = await CropPrice.findOne().sort({ date: -1 }).select("date").lean();
+  const latestCrop = await KalimatiPrice.findOne().sort({ date: -1 }).select("date").lean();
   if (latestCrop?.date && new Date(latestCrop.date) >= date) {
     return { saved: 0, message: "Crop data already up to date. Skipping scraper." };
   }
 
   const { rows, meta } = await scrapeKalimatiPrices();
+  logScrapePreview(rows);
   const cropRepo = new CropRepository();
 
   if (rows.length) {
@@ -46,18 +46,10 @@ export async function runDailyScrapeJob(): Promise<{ saved: number; message: str
     };
   }
 
-  const fallback = await upsertLatestKalimatiGithubArchive(14);
-  if (fallback) {
-    return {
-      saved: fallback.rows,
-      message: `Official site returned no parseable table (often bot/WAF). Upserted ${fallback.rows} rows from GitHub bulletin CSV for ${fallback.iso}. Source: github.com/ErKiran/kalimati`,
-    };
-  }
-
   return {
     saved: 0,
     message:
-      "No crop rows: official scrape empty and no recent GitHub CSV found. Run: npm run import:kalimati-archive — check network.",
+      "No crop rows from official Kalimati /price page. Check network or run: npm run scrape:kalimati-official",
   };
 }
 
@@ -89,13 +81,38 @@ export async function scrapeNocFuelPrices(): Promise<{ saved: number; message: s
 export async function runMlTrainJob(): Promise<{ ok: boolean; detail?: string }> {
   try {
     const url = `${env.mlServiceUrl.replace(/\/$/, "")}/train`;
-    await axios.post(url, { force: true }, { timeout: 600_000 });
+    await axios.post(url, { force: false }, { timeout: 600_000 });
     return { ok: true, detail: "ML training finished." };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[ML] train failed:", msg);
     return { ok: false, detail: msg };
   }
+}
+
+async function shouldTrainFromHistoricalData(): Promise<boolean> {
+  const latestPrediction = await KalimatiPrice.db.collection("predictions").findOne(
+    { algorithm: "random_forest" },
+    { sort: { date: -1 }, projection: { date: 1 } }
+  );
+  if (!latestPrediction?.date) return true; // no predictions at all
+
+  const [cropTip, weatherTip, fuelTip] = await Promise.all([
+    KalimatiPrice.findOne({ generated: false }).sort({ date: -1 }).select("date").lean(),
+    KalimatiPrice.db.collection("weather_data").findOne({}, { sort: { date: -1 }, projection: { date: 1 } }),
+    KalimatiPrice.db.collection("fuel_prices").findOne(
+      { fuel_type: "diesel" },
+      { sort: { date: -1 }, projection: { date: 1 } }
+    ),
+  ]);
+
+  const latestSource = [cropTip?.date, weatherTip?.date, fuelTip?.date]
+    .filter(Boolean)
+    .map((d) => new Date(d as Date).getTime())
+    .sort((a, b) => b - a)[0];
+
+  if (!latestSource) return true;
+  return new Date(latestPrediction.date).getTime() < latestSource;
 }
 
 export async function runLstmTrainJob(): Promise<{ ok: boolean; detail?: string }> {
@@ -134,8 +151,9 @@ export async function runFullDailyPipeline(): Promise<void> {
   }
 
   const hasNewData = scrape.saved > 0 || fuel.saved > 0 || weatherInserted > 0;
-  if (!hasNewData) {
-    console.log("[Pipeline] No new data detected. Skipping model retraining.");
+  const shouldTrain = hasNewData || (await shouldTrainFromHistoricalData());
+  if (!shouldTrain) {
+    console.log("[Pipeline] No new source data and predictions are already up to date. Skipping model retraining.");
   } else {
     const ml = await timed("RF training", () => runMlTrainJob());
     console.log("[Pipeline] ML:", ml);
