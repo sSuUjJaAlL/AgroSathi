@@ -6,6 +6,7 @@ import fs from "fs";
 import readline from "readline";
 import { connectDatabase } from "../config/database.js";
 import { CropPrice } from "../models/CropPrice.js";
+import { canonicalSelectedCropName } from "../config/selectedCrops.js";
 
 async function main() {
   const path = process.argv[2];
@@ -30,7 +31,7 @@ async function main() {
       row[h] = cols[i] ?? "";
     });
     const date = new Date(row["date"] || row["Date"]);
-    const item = row["item_name"] || row["item"] || row["commodity"];
+    const item = canonicalSelectedCropName(row["item_name"] || row["item"] || row["commodity"]);
     const min = Number(row["min_price"] ?? row["min"]);
     const max = Number(row["max_price"] ?? row["max"]);
     const avg = Number(row["avg_price"] ?? row["avg"] ?? row["average"]);

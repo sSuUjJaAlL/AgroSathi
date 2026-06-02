@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-from .training import run_training
+from .training import MLTrainingService, run_training
 from .lstm import run_lstm_training
 
 app = FastAPI(title="Agri Price ML Service", version="2.0.0")
@@ -27,7 +27,7 @@ class TrainRequest(BaseModel):
 def train(body: TrainRequest = TrainRequest()):
     """Train RandomForest for all crops. force=True bypasses preprocessing cache."""
     try:
-        result = run_training(force=body.force)
+        result = MLTrainingService().run_training(force=body.force)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

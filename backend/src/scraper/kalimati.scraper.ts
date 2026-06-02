@@ -1,5 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { canonicalSelectedCropName } from "../config/selectedCrops.js";
 
 export interface ScrapedRow {
   item_name: string;
@@ -208,8 +209,11 @@ export function parseKalimatiHtml(html: string, fetchedAt = new Date().toISOStri
     const avg = parseMoney($(cells[4]).text());
     if (min == null || max == null || avg == null) return;
 
+    const canonical = canonicalSelectedCropName(translateName(name));
+    if (!canonical) return;
+
     rows.push({
-      item_name: translateName(name),
+      item_name: canonical,
       unit,
       min_price: min,
       max_price: max,
@@ -232,21 +236,32 @@ function dedupeByName(rows: ScrapedRow[]): ScrapedRow[] {
   return [...map.values()];
 }
 
-export async function scrapeKalimatiPrices(): Promise<KalimatiScrapeResult> {
-  const fetchedAt = new Date().toISOString();
-  try {
-    const { data } = await axios.get<string>(KALIMATI_PRICE_URL, {
-      timeout: 45000,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      validateStatus: (s) => s >= 200 && s < 400,
-    });
-    return parseKalimatiHtml(data, fetchedAt);
-  } catch (e) {
-    console.error("[Kalimati] scrape error:", e instanceof Error ? e.message : e);
-    return { rows: [], meta: { listing_heading: null, fetched_at: fetchedAt } };
+/** Class-based Kalimati scraper (class diagram: data ingestion). */
+export class KalimatiScraper {
+  async scrapePrices(): Promise<KalimatiScrapeResult> {
+    const fetchedAt = new Date().toISOString();
+    try {
+      const { data } = await axios.get<string>(KALIMATI_PRICE_URL, {
+        timeout: 45000,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml",
+        },
+        validateStatus: (s) => s >= 200 && s < 400,
+      });
+      return parseKalimatiHtml(data, fetchedAt);
+    } catch (e) {
+      console.error("[Kalimati] scrape error:", e instanceof Error ? e.message : e);
+      return { rows: [], meta: { listing_heading: null, fetched_at: fetchedAt } };
+    }
   }
+
+  parseHtml(html: string, fetchedAt?: string): KalimatiScrapeResult {
+    return parseKalimatiHtml(html, fetchedAt);
+  }
+}
+
+export async function scrapeKalimatiPrices(): Promise<KalimatiScrapeResult> {
+  return new KalimatiScraper().scrapePrices();
 }

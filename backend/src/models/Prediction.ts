@@ -38,5 +38,8 @@ const PredictionSchema = new Schema<IPrediction>(
 PredictionSchema.index({ item_name: 1, horizon: 1, date: -1 });
 PredictionSchema.index({ item_name: 1, horizon: 1, target_date: 1 });
 PredictionSchema.index({ item_name: 1, horizon: 1, algorithm: 1, date: -1 });
+PredictionSchema.index({ item_name: 1, horizon: 1, forecast_batch_id: 1, target_date: 1 });
+PredictionSchema.index({ item_name: 1, horizon: 1, algorithm: 1, forecast_batch_id: 1, target_date: 1 });
+PredictionSchema.index({ horizon: 1, date: -1 });
 
 export const Prediction = mongoose.model<IPrediction>("Prediction", PredictionSchema, "predictions");

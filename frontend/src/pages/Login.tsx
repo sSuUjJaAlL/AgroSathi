@@ -21,19 +21,14 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-visual">
-        <div className="auth-visual-inner stagger">
-          <h2>Prices that breathe with Nepal’s mandis.</h2>
-          <p className="muted">
-            Live Kalimati snapshots, fused weather & fuel context, and RandomForest horizons — tuned for buyers and
-            farmers.
-          </p>
-        </div>
+          <div className="auth-visual-inner stagger">
+            <h2>AgriPrice Prediction System</h2>
+          </div>
       </div>
       <div className="auth-form-wrap">
         <div className="auth-panel stagger">
           <div className="card">
             <h1>Welcome back</h1>
-            <p className="muted card-sub">Sign in to your commodity intelligence workspace.</p>
             <form onSubmit={onSubmit}>
               <div className="field">
                 <label htmlFor="email">Email</label>

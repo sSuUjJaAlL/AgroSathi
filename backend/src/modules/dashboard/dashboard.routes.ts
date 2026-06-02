@@ -2,16 +2,16 @@ import { Router } from "express";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { DashboardController } from "./dashboard.controller.js";
 import { DashboardService } from "./dashboard.service.js";
-import { CropRepository } from "../crop/crop.repository.js";
-import { WeatherRepository } from "../weather/weather.repository.js";
-import { FuelRepository } from "../fuel/fuel.repository.js";
-import { PredictionRepository } from "../prediction/prediction.repository.js";
+import { CropPrice } from "../../domain/CropPrice.js";
+import { WeatherData } from "../../domain/WeatherData.js";
+import { FuelData } from "../../domain/FuelData.js";
+import { Prediction } from "../../domain/Prediction.js";
 
 const service = new DashboardService(
-  new CropRepository(),
-  new WeatherRepository(),
-  new FuelRepository(),
-  new PredictionRepository()
+  new CropPrice(),
+  new WeatherData(),
+  new FuelData(),
+  new Prediction()
 );
 const controller = new DashboardController(service);
 

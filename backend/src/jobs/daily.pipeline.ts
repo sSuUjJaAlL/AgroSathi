@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import axios from "axios";
 import { env } from "../config/env.js";
+import { CropPrice } from "../models/CropPrice.js";
+import { FuelPrice } from "../models/FuelPrice.js";
 import { scrapeKalimatiPrices } from "../scraper/kalimati.scraper.js";
 import { CropRepository } from "../modules/crop/crop.repository.js";
 import { FuelRepository } from "../modules/fuel/fuel.repository.js";
@@ -19,9 +21,14 @@ function todayUtcDate(): Date {
 }
 
 export async function runDailyScrapeJob(): Promise<{ saved: number; message: string }> {
+  const date = todayUtcDate();
+  const latestCrop = await CropPrice.findOne().sort({ date: -1 }).select("date").lean();
+  if (latestCrop?.date && new Date(latestCrop.date) >= date) {
+    return { saved: 0, message: "Crop data already up to date. Skipping scraper." };
+  }
+
   const { rows, meta } = await scrapeKalimatiPrices();
   const cropRepo = new CropRepository();
-  const date = todayUtcDate();
 
   if (rows.length) {
     const headingNote = meta.listing_heading ? ` | Page: ${meta.listing_heading.slice(0, 120)}` : "";
@@ -57,6 +64,10 @@ export async function runDailyScrapeJob(): Promise<{ saved: number; message: str
 export async function scrapeNocFuelPrices(): Promise<{ saved: number; message: string }> {
   const fuelRepo = new FuelRepository();
   const today = todayUtcDate();
+  const latestFuel = await FuelPrice.findOne().sort({ date: -1 }).select("date").lean();
+  if (latestFuel?.date && new Date(latestFuel.date) >= today) {
+    return { saved: 0, message: `Fuel data already up to date for ${today.toISOString().slice(0, 10)}. Skipping fuel sync.` };
+  }
 
   let rows = await scrapeNocCurrentPrices();
   if (!rows.length) {
@@ -100,22 +111,43 @@ export async function runLstmTrainJob(): Promise<{ ok: boolean; detail?: string 
 }
 
 export async function runFullDailyPipeline(): Promise<void> {
-  const scrape = await runDailyScrapeJob();
+  const started = Date.now();
+  const timed = async <T>(label: string, fn: () => Promise<T>) => {
+    const t = Date.now();
+    const out = await fn();
+    console.log(`[Pipeline] ${label}: ${((Date.now() - t) / 1000).toFixed(2)} sec`);
+    return out;
+  };
+
+  const scrape = await timed("Crop scraping", () => runDailyScrapeJob());
   console.log("[Pipeline]", scrape.message);
+  const fuel = await timed("Fuel sync", () => scrapeNocFuelPrices());
+  console.log("[Pipeline]", fuel.message);
+
+  let weatherInserted = 0;
   try {
-    const w = await syncWeatherForCropDateRange();
+    const w = await timed("Weather sync", () => syncWeatherForCropDateRange());
+    weatherInserted = w.inserted;
     console.log("[Pipeline] Weather sync:", w);
   } catch (err) {
     console.warn("[Pipeline] Weather sync failed (continuing):", err instanceof Error ? err.message : err);
   }
-  const ml = await runMlTrainJob();
-  console.log("[Pipeline] ML:", ml);
+
+  const hasNewData = scrape.saved > 0 || fuel.saved > 0 || weatherInserted > 0;
+  if (!hasNewData) {
+    console.log("[Pipeline] No new data detected. Skipping model retraining.");
+  } else {
+    const ml = await timed("RF training", () => runMlTrainJob());
+    console.log("[Pipeline] ML:", ml);
+  }
+
   try {
-    const notif = await checkAndGenerateNotifications();
+    const notif = await timed("Notifications", () => checkAndGenerateNotifications());
     console.log("[Pipeline] Notifications:", notif);
   } catch (err) {
     console.warn("[Pipeline] Notification check failed (continuing):", err instanceof Error ? err.message : err);
   }
+  console.log(`[Pipeline] Total Pipeline Time: ${((Date.now() - started) / 1000).toFixed(2)} sec`);
 }
 
 export async function runWeeklyFullRetrain(): Promise<void> {

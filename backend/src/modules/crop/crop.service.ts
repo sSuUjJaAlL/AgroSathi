@@ -1,5 +1,5 @@
 import { CropRepository } from "./crop.repository.js";
-import { FEATURED_CROP_KEYWORDS } from "../../config/featuredCrops.js";
+import { SELECTED_CROPS } from "../../config/selectedCrops.js";
 
 export class CropService {
   constructor(private readonly repo: CropRepository) {}
@@ -24,17 +24,9 @@ export class CropService {
   }
 
   async listFeaturedItems(): Promise<string[]> {
-    const pool = await this.repo.topItemsByRecordCount(300);
-    const result: string[] = [];
-    const seen = new Set<string>();
-    for (const kw of FEATURED_CROP_KEYWORDS) {
-      const match = pool.find((name) => name.toLowerCase().includes(kw));
-      if (match && !seen.has(match)) {
-        result.push(match);
-        seen.add(match);
-      }
-    }
-    return result;
+    const items = await this.repo.listDistinctItems();
+    const available = new Set(items);
+    return [...SELECTED_CROPS].filter((c) => available.has(c));
   }
 
   async getCurrentForItem(itemName: string) {

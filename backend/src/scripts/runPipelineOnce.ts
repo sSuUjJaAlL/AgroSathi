@@ -12,7 +12,7 @@
  */
 import { connectDatabase } from "../config/database.js";
 import { runFullDailyPipeline } from "../jobs/daily.pipeline.js";
-import { importKalimatiGithubArchiveRange } from "./importKalimatiGithubArchive.js";
+import { importKalimatiGithubArchiveMissingRange } from "./importKalimatiGithubArchive.js";
 import { runHistoricalSeed } from "./seedHistorical.js";
 import { syncWeatherForCropDateRange } from "./syncWeatherOpenMeteo.js";
 
@@ -36,15 +36,22 @@ function archiveRangeFromEnv(): { from: Date; to: Date } {
 }
 
 async function main() {
+  const t0 = Date.now();
+  const stage = async <T>(label: string, fn: () => Promise<T>) => {
+    const s = Date.now();
+    const out = await fn();
+    console.log(`[Pipeline] ${label}: ${((Date.now() - s) / 1000).toFixed(2)}s`);
+    return out;
+  };
   const withSynthetic = process.argv.includes("--with-synthetic-history");
   const skipArchive = process.argv.includes("--skip-archive");
   const skipWeather = process.argv.includes("--skip-weather-sync");
 
-  await connectDatabase();
+  await stage("Mongo connect", () => connectDatabase());
   console.log("[Pipeline] MongoDB connected.");
 
   if (withSynthetic) {
-    await runHistoricalSeed();
+    await stage("Synthetic seed", () => runHistoricalSeed());
   } else {
     console.log("[Pipeline] Synthetic seed skipped (default). Use --with-synthetic-history for demo-only fake history.");
   }
@@ -57,21 +64,26 @@ async function main() {
       "→",
       to.toISOString().slice(0, 10)
     );
-    const ar = await importKalimatiGithubArchiveRange(from, to);
-    console.log("[Pipeline] Archive import:", ar.days, "days with CSV,", ar.rows, "row upserts.");
+    const ar = await stage("Archive import", () => importKalimatiGithubArchiveMissingRange(from, to));
+    if (ar.skipped) {
+      console.log("[Pipeline] Crop data already up to date. Skipping archive import.");
+    } else {
+      console.log("[Pipeline] Archive import:", ar.days, "days with CSV,", ar.rows, "row upserts.");
+    }
   } else {
     console.log("[Pipeline] Skipping Kalimati archive (--skip-archive). Ensure crop_prices already has history.");
   }
 
   if (!skipWeather) {
-    const w = await syncWeatherForCropDateRange();
+    const w = await stage("Weather sync", () => syncWeatherForCropDateRange());
     console.log("[Pipeline] Weather (Open-Meteo):", w);
   } else {
     console.log("[Pipeline] Skipping weather sync (--skip-weather-sync).");
   }
 
-  await runFullDailyPipeline();
+  await stage("Daily pipeline", () => runFullDailyPipeline());
   console.log("[Pipeline] Finished.");
+  console.log(`[Pipeline] Total: ${((Date.now() - t0) / 1000).toFixed(2)}s`);
   process.exit(0);
 }
 

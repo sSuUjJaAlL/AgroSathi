@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import axios from "axios";
 import { connectDatabase } from "../config/database.js";
 import { CropPrice } from "../models/CropPrice.js";
+import { canonicalSelectedCropName } from "../config/selectedCrops.js";
 
 const RAW_BASE =
   "https://raw.githubusercontent.com/ErKiran/kalimati/master/data/csv";
@@ -104,16 +105,17 @@ function archiveCsvToBulkOps(raw: string): CropUpsertOp[] {
     if (cols.length < 6) continue;
     const date = new Date(cols[0] + "T12:00:00.000Z");
     const item_name = cols[1];
+    const canonical = canonicalSelectedCropName(item_name);
     const max_price = Number.parseFloat(cols[3]);
     const min_price = Number.parseFloat(cols[4]);
     const avg_price = Number.parseFloat(cols[5]);
-    if (!item_name || !Number.isFinite(min_price) || !Number.isFinite(max_price) || !Number.isFinite(avg_price)) {
+    if (!canonical || !Number.isFinite(min_price) || !Number.isFinite(max_price) || !Number.isFinite(avg_price)) {
       continue;
     }
     ops.push({
       updateOne: {
-        filter: { date, item_name },
-        update: { $set: { date, item_name, min_price, max_price, avg_price } },
+        filter: { date, item_name: canonical },
+        update: { $set: { date, item_name: canonical, min_price, max_price, avg_price } },
         upsert: true,
       },
     });
@@ -171,6 +173,26 @@ export async function importKalimatiGithubArchiveRange(from: Date, to: Date): Pr
   }
 
   return { days: daysOk, rows: totalRows };
+}
+
+/**
+ * Incremental import: starts from day after the latest crop_prices date.
+ */
+export async function importKalimatiGithubArchiveMissingRange(from: Date, to: Date): Promise<{ days: number; rows: number; skipped: boolean }> {
+  const latest = await CropPrice.findOne().sort({ date: -1 }).select("date").lean();
+  if (latest?.date) {
+    const next = new Date(latest.date);
+    next.setUTCHours(12, 0, 0, 0);
+    next.setUTCDate(next.getUTCDate() + 1);
+    if (next > to) {
+      return { days: 0, rows: 0, skipped: true };
+    }
+    if (next > from) {
+      from = next;
+    }
+  }
+  const out = await importKalimatiGithubArchiveRange(from, to);
+  return { ...out, skipped: false };
 }
 
 async function main() {

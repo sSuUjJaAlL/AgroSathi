@@ -1,4 +1,7 @@
 const TOKEN_KEY = "agri_jwt";
+const GET_CACHE_TTL_MS = 30_000;
+const getCache = new Map<string, { value: unknown; expiresAt: number }>();
+const inflightGet = new Map<string, Promise<unknown>>();
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -28,7 +31,9 @@ function parseErrorBody(text: string, status: number): string {
   return t;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+type RequestOpts = RequestInit & { signal?: AbortSignal };
+
+async function request<T>(path: string, init?: RequestOpts): Promise<T> {
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...(init?.headers || {}),
@@ -40,7 +45,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(path, { ...init, headers });
+    res = await fetch(path, { ...init, headers, signal: init?.signal });
   } catch {
     throw new Error("Network error — check that the backend is running (port 4000) and MongoDB is reachable.");
   }
@@ -55,6 +60,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new Error("Invalid JSON from server");
   }
+}
+
+async function requestGetCached<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const key = path;
+  const now = Date.now();
+  const cached = getCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.value as T;
+
+  const pending = inflightGet.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const p = request<T>(path, { signal })
+    .then((v) => {
+      getCache.set(key, { value: v, expiresAt: Date.now() + GET_CACHE_TTL_MS });
+      return v;
+    })
+    .finally(() => inflightGet.delete(key));
+  inflightGet.set(key, p as Promise<unknown>);
+  return p;
 }
 
 export type Role = "farmer" | "buyer";
@@ -105,9 +129,9 @@ const emptySummary: DashboardPayload["accuracy_summary"] = {
   computed_at: null,
 };
 
-export async function fetchDashboard(item: string): Promise<DashboardPayload> {
+export async function fetchDashboard(item: string, signal?: AbortSignal): Promise<DashboardPayload> {
   const q = encodeURIComponent(item);
-  const d = await request<DashboardPayload>(`/api/dashboard/${q}`);
+  const d = await requestGetCached<DashboardPayload>(`/api/dashboard/${q}`, signal);
   return {
     ...d,
     historical_30d: d.historical_30d ?? [],
@@ -118,14 +142,14 @@ export async function fetchDashboard(item: string): Promise<DashboardPayload> {
   };
 }
 
-export async function fetchSevenDay(item: string) {
+export async function fetchSevenDay(item: string, signal?: AbortSignal) {
   const q = encodeURIComponent(item);
-  return request<ForecastPayload>(`/api/predict/7days/${q}`);
+  return requestGetCached<ForecastPayload>(`/api/predict/7days/${q}`, signal);
 }
 
-export async function fetchThirtyDay(item: string) {
+export async function fetchThirtyDay(item: string, signal?: AbortSignal) {
   const q = encodeURIComponent(item);
-  return request<ForecastPayload>(`/api/predict/30days/${q}`);
+  return requestGetCached<ForecastPayload>(`/api/predict/30days/${q}`, signal);
 }
 
 export async function runPipeline() {
@@ -156,8 +180,8 @@ export async function markAllNotificationsRead() {
   return request<{ ok: boolean }>("/api/notifications/read-all", { method: "PATCH" });
 }
 
-export async function fetchFeaturedCrops() {
-  return request<{ items: string[] }>("/api/crop/featured");
+export async function fetchFeaturedCrops(signal?: AbortSignal) {
+  return requestGetCached<{ items: string[] }>("/api/crop/featured", signal);
 }
 
 export async function fetchCropSnapshot() {
@@ -189,14 +213,14 @@ export async function fetchFuelImpact(crop: string) {
   );
 }
 
-export async function fetchMultiAlgoForecast(item: string, horizon: "7d" | "30d" = "7d") {
-  return request<{
+export async function fetchMultiAlgoForecast(item: string, horizon: "7d" | "30d" = "7d", signal?: AbortSignal) {
+  return requestGetCached<{
     item: string;
     horizon: string;
     random_forest: Array<{ target_date: string | null; predicted_price: number }>;
     moving_average: Array<{ target_date: string | null; predicted_price: number }>;
     lstm: Array<{ target_date: string | null; predicted_price: number }>;
-  }>(`/api/predict/multi/${encodeURIComponent(item)}?horizon=${horizon}`);
+  }>(`/api/predict/multi/${encodeURIComponent(item)}?horizon=${horizon}`, signal);
 }
 
 export async function triggerLstmTrain() {

@@ -21,3 +21,5 @@ echo All services started!
 echo Open your browser: http://localhost:5173
 echo.
 start http://localhost:5173
+
+

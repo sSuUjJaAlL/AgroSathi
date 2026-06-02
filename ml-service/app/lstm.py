@@ -7,20 +7,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .preprocessing import LSTM_FEATURE_COLUMNS, get_mongo_db, merge_feature_frame
+from .preprocessing import LSTM_FEATURE_COLUMNS, SELECTED_CROPS, get_mongo_db, merge_feature_frame
 
 LSTM_MODEL_DIR = Path(__file__).resolve().parent.parent / "model" / "lstm"
-
-FEATURED_KEYWORDS = ["tomato", "potato", "onion", "cauliflower", "cabbage", "chamal", "wheat", "ginger", "garlic", "chilli"]
 
 SEQUENCE_LEN = 30  # days of history fed to LSTM
 EPOCHS = 40
 BATCH_SIZE = 32
 
 
-def is_featured(item_name: str) -> bool:
-    lower = item_name.lower()
-    return any(kw in lower for kw in FEATURED_KEYWORDS)
+def is_selected(item_name: str) -> bool:
+    return item_name in SELECTED_CROPS
 
 
 def build_sequences(prices: np.ndarray, features: np.ndarray, seq_len: int):
@@ -44,11 +41,12 @@ def run_lstm_training() -> dict:
     if full.empty:
         raise ValueError("No data for LSTM training.")
 
-    items = [i for i in full["item_name"].unique() if is_featured(i)]
+    items = [i for i in full["item_name"].unique() if is_selected(i)]
     if not items:
-        items = full["item_name"].unique().tolist()[:10]
+        items = [i for i in SELECTED_CROPS if i in full["item_name"].unique().tolist()]
 
     db = get_mongo_db()
+    db["predictions"].delete_many({"algorithm": "lstm"})
     batch_7 = str(uuid.uuid4())
     batch_30 = str(uuid.uuid4())
     gen_date = datetime.utcnow()

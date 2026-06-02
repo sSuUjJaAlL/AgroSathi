@@ -8,6 +8,25 @@ export interface NocFuelRow {
   source: string;
 }
 
+function normalizeLabel(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function parsePrice(s: string): number | null {
+  const v = parseFloat(s.replace(/[^\d.]/g, "").trim());
+  if (!Number.isFinite(v) || v < 50 || v > 5000) return null;
+  return v;
+}
+
+function detectFuelType(labelRaw: string): FuelType | null {
+  const label = normalizeLabel(labelRaw);
+  if (label.includes("petrol") || label.includes("पेट्रोल")) return "petrol";
+  if (label.includes("diesel") || label.includes("डिजेल")) return "diesel";
+  if (label.includes("kerosene") || label.includes("मट्टितेल")) return "kerosene";
+  if (label.includes("lpg") || label.includes("gas") || label.includes("एलपिजी")) return "lpg";
+  return null;
+}
+
 /**
  * Attempt to scrape current fuel prices from NOC website.
  * NOC HTML structure changes occasionally — returns empty array on parse failure.
@@ -18,16 +37,29 @@ const NOC_URLS = [
   "https://noc.org.np/",
 ];
 
-export async function scrapeNocCurrentPrices(): Promise<NocFuelRow[]> {
-  for (const url of NOC_URLS) {
-    try {
-      const result = await attemptScrape(url);
-      if (result.length >= 2) return result;
-    } catch {
-      /* try next URL */
+/** Class-based NOC scraper (class diagram: fuel ingestion). */
+export class NocScraper {
+  private readonly urls = NOC_URLS;
+
+  async scrapeCurrentPrices(): Promise<NocFuelRow[]> {
+    for (const url of this.urls) {
+      try {
+        const result = await attemptScrape(url);
+        if (result.length >= 2) return result;
+      } catch {
+        /* try next URL */
+      }
     }
+    return [];
   }
-  return [];
+
+  fallbackPrices(): NocFuelRow[] {
+    return nocFallbackPrices();
+  }
+}
+
+export async function scrapeNocCurrentPrices(): Promise<NocFuelRow[]> {
+  return new NocScraper().scrapeCurrentPrices();
 }
 
 async function attemptScrape(url: string): Promise<NocFuelRow[]> {
@@ -47,15 +79,11 @@ async function attemptScrape(url: string): Promise<NocFuelRow[]> {
     $("table tr").each((_i, el) => {
       const cells = $(el).find("td");
       if (cells.length < 2) return;
-      const label = $(cells[0]).text().trim().toLowerCase();
-      const priceText = $(cells[1]).text().replace(/[^\d.]/g, "").trim();
-      const price = parseFloat(priceText);
-      if (!price || isNaN(price) || price < 50 || price > 5000) return;
-
-      if (label.includes("petrol")) rows.push({ fuel_type: "petrol", price_npr: price, source: "NOC website" });
-      else if (label.includes("diesel")) rows.push({ fuel_type: "diesel", price_npr: price, source: "NOC website" });
-      else if (label.includes("kerosene")) rows.push({ fuel_type: "kerosene", price_npr: price, source: "NOC website" });
-      else if (label.includes("lpg") || label.includes("gas")) rows.push({ fuel_type: "lpg", price_npr: price, source: "NOC website" });
+      const fuelType = detectFuelType($(cells[0]).text());
+      if (!fuelType) return;
+      const price = parsePrice($(cells[1]).text()) ?? parsePrice($(cells[2]).text() || "");
+      if (!price) return;
+      rows.push({ fuel_type: fuelType, price_npr: price, source: "NOC website" });
     });
 
     if (rows.length >= 2) return rows;
@@ -69,10 +97,10 @@ async function attemptScrape(url: string): Promise<NocFuelRow[]> {
       return p >= min && p <= max ? p : null;
     };
 
-    const petrol = extract(/petrol[^0-9]*?(\d{2,4}(?:\.\d{1,2})?)/i, 100, 500);
-    const diesel = extract(/diesel[^0-9]*?(\d{2,4}(?:\.\d{1,2})?)/i, 80, 400);
-    const kerosene = extract(/kerosene[^0-9]*?(\d{2,4}(?:\.\d{1,2})?)/i, 80, 400);
-    const lpg = extract(/(?:lpg|cooking gas)[^0-9]*?(\d{3,5}(?:\.\d{1,2})?)/i, 500, 5000);
+    const petrol = extract(/(?:petrol|पेट्रोल)[^0-9]*?(\d{2,4}(?:\.\d{1,2})?)/i, 100, 500);
+    const diesel = extract(/(?:diesel|डिजेल)[^0-9]*?(\d{2,4}(?:\.\d{1,2})?)/i, 80, 400);
+    const kerosene = extract(/(?:kerosene|मट्टितेल)[^0-9]*?(\d{2,4}(?:\.\d{1,2})?)/i, 80, 400);
+    const lpg = extract(/(?:lpg|cooking gas|एलपिजी)[^0-9]*?(\d{3,5}(?:\.\d{1,2})?)/i, 500, 5000);
 
     const s2: NocFuelRow[] = [];
     if (petrol) s2.push({ fuel_type: "petrol", price_npr: petrol, source: "NOC website" });

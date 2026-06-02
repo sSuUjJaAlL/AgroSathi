@@ -24,18 +24,13 @@ export default function Register() {
     <div className="auth-page">
       <div className="auth-visual">
         <div className="auth-visual-inner stagger">
-          <h2>Pick a lane — we adapt the charts.</h2>
-          <p className="muted">
-            Buyers lean on 7-day paths and early-buy signals; farmers watch 30-day drift with validation-backed
-            explanations.
-          </p>
+          <h2>AgriPrice Prediction System</h2>
         </div>
       </div>
       <div className="auth-form-wrap">
         <div className="auth-panel stagger">
           <div className="card">
             <h1>Create account</h1>
-            <p className="muted card-sub">Choose your primary role — dashboards animate to match.</p>
             <form onSubmit={onSubmit}>
               <div className="field">
                 <label htmlFor="email">Email</label>

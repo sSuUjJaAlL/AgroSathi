@@ -36,8 +36,12 @@ export async function syncWeatherForCropDateRange(): Promise<{ inserted: number;
     return { inserted: 0, range: "(no crop_prices)" };
   }
 
-  const start = toIsoDate(new Date(agg[0]._min));
+  const cropStart = toIsoDate(new Date(agg[0]._min));
   const end = toIsoDate(new Date(agg[0]._max));
+  const latestWeather = await WeatherData.findOne().sort({ date: -1 }).select("date").lean();
+  const start = latestWeather?.date ? addDays(toIsoDate(new Date(latestWeather.date)), 1) : cropStart;
+  if (start > end) return { inserted: 0, range: `${start}..${end} (up-to-date)` };
+
   const rows = await fetchWeatherChunked(start, end);
   if (!rows.length) return { inserted: 0, range: `${start}..${end}` };
 

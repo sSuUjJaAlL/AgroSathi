@@ -10,6 +10,37 @@ from pymongo import MongoClient
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import MinMaxScaler
 
+SELECTED_CROPS = [
+    "Tomato Small (Local)",
+    "Ginger",
+    "Cabbage (Local)",
+    "Dry Chilli",
+    "Garlic Dry Chinese",
+    "Carrot (Local)",
+    "Potato Red",
+    "Onion Dry (Indian)",
+]
+
+_ALIASES = {
+    "tomato small(local)": "Tomato Small (Local)",
+    "tomato small (local)": "Tomato Small (Local)",
+    "ginger": "Ginger",
+    "cabbage(local)": "Cabbage (Local)",
+    "cabbage (local)": "Cabbage (Local)",
+    "chilli dry": "Dry Chilli",
+    "dry chilli": "Dry Chilli",
+    "garlic dry chinese": "Garlic Dry Chinese",
+    "carrot(local)": "Carrot (Local)",
+    "carrot (local)": "Carrot (Local)",
+    "potato red": "Potato Red",
+    "onion dry (indian)": "Onion Dry (Indian)",
+    "onion dry(indian)": "Onion Dry (Indian)",
+}
+
+
+def canonical_crop_name(name: str) -> str | None:
+    return _ALIASES.get(str(name).strip().lower())
+
 
 def db_name_from_uri(uri: str) -> str:
     path = urlparse(uri).path.lstrip("/")
@@ -103,6 +134,8 @@ def load_raw_frames():
     ))
     crops = pd.DataFrame(crops_raw)
     if not crops.empty and "date" in crops.columns:
+        crops["item_name"] = crops["item_name"].map(canonical_crop_name)
+        crops = crops[crops["item_name"].notna()]
         crops["date"] = pd.to_datetime(crops["date"]).dt.normalize()
         crops = crops[crops["date"] >= cutoff]
 

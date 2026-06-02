@@ -1,8 +1,8 @@
 import axios from "axios";
-import { CropRepository } from "../crop/crop.repository.js";
-import { WeatherRepository } from "../weather/weather.repository.js";
-import { FuelRepository } from "../fuel/fuel.repository.js";
-import { PredictionRepository } from "../prediction/prediction.repository.js";
+import { CropPrice } from "../../domain/CropPrice.js";
+import { WeatherData } from "../../domain/WeatherData.js";
+import { FuelData } from "../../domain/FuelData.js";
+import { Prediction } from "../../domain/Prediction.js";
 
 export type Recommendation = "BUY_EARLY_OR_HOLD" | "SELL" | "WAIT";
 
@@ -42,13 +42,14 @@ async function fetchLiveWeather(): Promise<{ date: string; temperature: number; 
 
 export class DashboardService {
   constructor(
-    private readonly crops: CropRepository,
-    private readonly weather: WeatherRepository,
-    private readonly fuel: FuelRepository,
-    private readonly predictions: PredictionRepository
+    private readonly crops: CropPrice,
+    private readonly weather: WeatherData,
+    private readonly fuel: FuelData,
+    private readonly predictions: Prediction
   ) {}
 
   async buildDashboard(itemName: string) {
+    const started = Date.now();
     const [
       currentDoc,
       liveWeather,
@@ -59,6 +60,8 @@ export class DashboardService {
       historical30,
       weather14,
       fuel14,
+      weatherMay22Jun2,
+      fuelMay22Jun2,
       vegetableAccuracy,
       cropRecordCount,
       predGeneratedAt,
@@ -74,10 +77,13 @@ export class DashboardService {
       this.crops.historyForItem(itemName, 30),
       this.weather.findRecent(14),
       this.fuel.findRecent(14),
+      this.weather.findWindowLatestYear(5, 22, 6, 2),
+      this.fuel.findWindowLatestYear(5, 22, 6, 2),
       this.predictions.latest7dAccuracyByItem(),
       this.crops.countDocuments(),
       this.predictions.latestPredictionGeneratedAt(),
     ]);
+    console.log(`[DashboardService] DB+external fanout for ${itemName}: ${Date.now() - started}ms`);
 
     const hasCurrentRow =
       currentDoc != null &&
@@ -101,7 +107,37 @@ export class DashboardService {
     const avgPriceErrNpr =
       currentPrice != null && avgPctErr != null ? (avgPctErr / 100) * currentPrice : null;
 
-    return {
+    const weatherSeries =
+      weatherMay22Jun2.length > 0
+        ? weatherMay22Jun2
+        : weather14.length > 0
+          ? weather14
+        : liveWeather
+          ? [{
+              date: new Date(liveWeather.date),
+              temperature: liveWeather.temperature,
+              rainfall: liveWeather.rainfall,
+              humidity: liveWeather.humidity,
+            }]
+          : weatherLatest
+            ? [{
+                date: new Date(weatherLatest.date),
+                temperature: weatherLatest.temperature,
+                rainfall: weatherLatest.rainfall,
+                humidity: weatherLatest.humidity,
+              }]
+            : [];
+
+    const fuelSeries =
+      fuelMay22Jun2.length > 0
+        ? fuelMay22Jun2
+        : fuel14.length > 0
+          ? fuel14
+        : fuelLatest
+          ? [fuelLatest]
+          : [];
+
+    const out = {
       item: itemName,
       current_price: hasCurrentRow
         ? {
@@ -136,13 +172,13 @@ export class DashboardService {
       accuracy_table: accuracyRows,
       trend_30d: trend30,
       historical_30d: historical30,
-      weather_14d: weather14.map((w) => ({
+      weather_14d: weatherSeries.map((w) => ({
         date: new Date(w.date).toISOString(),
         temperature: w.temperature,
         rainfall: w.rainfall,
         humidity: w.humidity,
       })),
-      fuel_14d: fuel14.map((f) => ({
+      fuel_14d: fuelSeries.map((f) => ({
         date: new Date(f.date).toISOString(),
         petrol_price: f.petrol_price,
         diesel_price: f.diesel_price,
@@ -158,6 +194,8 @@ export class DashboardService {
         computed_at: predGeneratedAt?.toISOString() ?? null,
       },
     };
+    console.log(`[DashboardService] Response build for ${itemName}: ${Date.now() - started}ms total`);
+    return out;
   }
 
   private computeRecommendation(

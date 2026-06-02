@@ -10,14 +10,19 @@
     "seed": "tsx src/scripts/seedHistorical.ts",
     "scrape-once": "tsx src/scripts/runScraperOnce.ts",
     "import-csv": "tsx src/scripts/importCsv.ts",
+    "restrict:crops": "tsx src/scripts/restrictToSelectedCrops.ts",
     "test:scrape": "tsx src/scripts/testKalimatiScrape.ts",
     "pipeline:once": "tsx src/scripts/runPipelineOnce.ts",
     "sync:weather": "tsx src/scripts/weatherSyncOnce.ts",
     "import:kalimati-archive": "tsx src/scripts/importKalimatiGithubArchive.ts",
     "backfill:weather": "tsx src/scripts/backfillWeather.ts",
     "backfill:prices": "tsx src/scripts/backfillPrices.ts",
+    "build:historical-analysis": "tsx src/scripts/buildHistoricalAnalysisDatasets.ts",
+    "export:historical-analysis": "tsx src/scripts/exportHistoricalAnalysisFiles.ts",
     "migrate:atlas": "tsx src/scripts/migrateToAtlas.ts",
-    "seed:fuel": "tsx src/scripts/seedFuelPrices.ts"
+    "seed:fuel": "tsx src/scripts/seedFuelPrices.ts",
+    "backfill:5y:official": "tsx src/scripts/backfillFiveYearsOfficial.ts",
+    "backfill:5y:hybrid": "tsx src/scripts/backfillHybridFiveYears.ts"
   },
   "dependencies": {
     "axios": "^1.7.7",

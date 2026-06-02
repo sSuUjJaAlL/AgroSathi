@@ -24,5 +24,7 @@ const CropPriceSchema = new Schema<ICropPrice>(
 );
 
 CropPriceSchema.index({ date: 1, item_name: 1 }, { unique: true });
+CropPriceSchema.index({ item_name: 1 });
+CropPriceSchema.index({ item_name: 1, date: -1 });
 
 export const CropPrice = mongoose.model<ICropPrice>("CropPrice", CropPriceSchema, "crop_prices");

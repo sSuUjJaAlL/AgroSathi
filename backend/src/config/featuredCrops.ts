@@ -1,17 +1,7 @@
-export const FEATURED_CROP_KEYWORDS = [
-  "tomato",
-  "potato",
-  "onion",
-  "cauliflower",
-  "cabbage",
-  "ginger",
-  "garlic",
-  "chilli",
-  "carrot",
-  "radish",
-] as const;
+import { SELECTED_CROPS } from "./selectedCrops.js";
+
+export const FEATURED_CROP_KEYWORDS = SELECTED_CROPS;
 
 export function isFeaturedCrop(itemName: string): boolean {
-  const lower = itemName.toLowerCase();
-  return FEATURED_CROP_KEYWORDS.some((kw) => lower.includes(kw));
+  return FEATURED_CROP_KEYWORDS.includes(itemName as (typeof FEATURED_CROP_KEYWORDS)[number]);
 }

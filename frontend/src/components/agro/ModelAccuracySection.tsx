@@ -3,7 +3,7 @@ import type { DashboardPayload } from "../../services/api";
 import { accuracyBand, bandVisual } from "../../utils/accuracyMeta";
 import { veggieIcon } from "../../utils/vegIcon";
 
-const MAX_ROWS = 10;
+const MAX_ROWS = 8;
 
 export function ModelAccuracySection({
   vegetable_model_accuracy,

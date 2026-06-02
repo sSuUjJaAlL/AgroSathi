@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import { CropService } from "./crop.service.js";
 
+function formatDate(value: Date | string): string {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
 export class CropController {
   constructor(private readonly service: CropService) {}
 
@@ -18,7 +22,17 @@ export class CropController {
 
   snapshot = async (_req: Request, res: Response): Promise<void> => {
     const rows = await this.service.getLatestSnapshot();
-    res.json({ prices: rows });
+    res.json({
+      section: "Crop Prices",
+      total_records: rows.length,
+      records: rows.map((row) => ({
+        crop_name: row.item_name,
+        date: formatDate(row.date),
+        min_price_npr: row.min_price,
+        avg_price_npr: row.avg_price,
+        max_price_npr: row.max_price,
+      })),
+    });
   };
 
   listFeatured = async (_req: Request, res: Response): Promise<void> => {
@@ -33,6 +47,15 @@ export class CropController {
       res.status(404).json({ message: "Item not found" });
       return;
     }
-    res.json(row);
+    res.json({
+      section: "Crop Prices",
+      record: {
+        crop_name: row.item_name,
+        date: formatDate(row.date),
+        min_price_npr: row.min_price,
+        avg_price_npr: row.avg_price,
+        max_price_npr: row.max_price,
+      },
+    });
   };
 }

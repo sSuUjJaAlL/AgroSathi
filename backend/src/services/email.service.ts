@@ -334,34 +334,38 @@ export async function sendSubscriptionWelcomeEmail(opts: {
   crops: string[];
   role: "buyer" | "farmer";
   todayPrices?: Record<string, number>;
-  forecastPrices?: Record<string, number[]>;
+  forecastPrices7d?: Record<string, number[]>;
+  forecastPrices30d?: Record<string, number[]>;
 }): Promise<void> {
   if (!isEmailConfigured()) {
     console.warn("[Email] SMTP not configured — skipping subscription welcome email.");
     return;
   }
 
-  const horizonLabel = opts.role === "buyer" ? "7-Day Forecast Avg" : "30-Day Forecast Avg";
-
   const cropRows = opts.crops
     .map((c) => {
       const price = opts.todayPrices?.[c];
-      const forecasts = opts.forecastPrices?.[c] ?? [];
-      const avgForecast = forecasts.length > 0
-        ? forecasts.reduce((s, p) => s + p, 0) / forecasts.length
-        : null;
+      const forecasts7 = opts.forecastPrices7d?.[c] ?? [];
+      const forecasts30 = opts.forecastPrices30d?.[c] ?? [];
+
+      const avgForecast7 = forecasts7.length > 0 ? forecasts7.reduce((s, p) => s + p, 0) / forecasts7.length : null;
+      const avgForecast30 = forecasts30.length > 0 ? forecasts30.reduce((s, p) => s + p, 0) / forecasts30.length : null;
 
       const priceCell = price != null
         ? `<td style="padding:10px 16px;font-size:14px;color:#15803d;font-weight:700;">Rs. ${price.toFixed(0)} / KG</td>`
         : `<td style="padding:10px 16px;font-size:13px;color:#94a3b8;">—</td>`;
-      const forecastCell = avgForecast != null
-        ? `<td style="padding:10px 16px;font-size:14px;color:#2563eb;font-weight:700;">Rs. ${avgForecast.toFixed(0)} / KG</td>`
+      const forecast7Cell = avgForecast7 != null
+        ? `<td style="padding:10px 16px;font-size:14px;color:#2563eb;font-weight:700;">Rs. ${avgForecast7.toFixed(0)} / KG</td>`
+        : `<td style="padding:10px 16px;font-size:13px;color:#94a3b8;">—</td>`;
+      const forecast30Cell = avgForecast30 != null
+        ? `<td style="padding:10px 16px;font-size:14px;color:#0ea5e9;font-weight:700;">Rs. ${avgForecast30.toFixed(0)} / KG</td>`
         : `<td style="padding:10px 16px;font-size:13px;color:#94a3b8;">—</td>`;
 
       return `<tr style="border-bottom:1px solid #e5e7eb;">
         <td style="padding:10px 16px;font-size:14px;color:#1e293b;font-weight:600;">${c}</td>
         ${priceCell}
-        ${forecastCell}
+        ${forecast7Cell}
+        ${forecast30Cell}
       </tr>`;
     })
     .join("");
@@ -405,7 +409,8 @@ export async function sendSubscriptionWelcomeEmail(opts: {
                 <tr style="background:#f8fafc;">
                   <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">Commodity</th>
                   <th style="padding:10px 16px;font-size:11px;color:#6b7280;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">Today's Price</th>
-                  <th style="padding:10px 16px;font-size:11px;color:#2563eb;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">${horizonLabel}</th>
+                  <th style="padding:10px 16px;font-size:11px;color:#2563eb;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">7-Day Forecast Avg</th>
+                  <th style="padding:10px 16px;font-size:11px;color:#0ea5e9;font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:0.4px;">30-Day Forecast Avg</th>
                 </tr>
               </thead>
               <tbody>${cropRows}</tbody>

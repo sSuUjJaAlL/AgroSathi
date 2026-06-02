@@ -8,6 +8,7 @@ import { User } from "../../models/User.js";
 import { CropPrice } from "../../models/CropPrice.js";
 import { Prediction } from "../../models/Prediction.js";
 import { sendSubscriptionWelcomeEmail } from "../../services/email.service.js";
+import { SELECTED_CROPS } from "../../config/selectedCrops.js";
 
 const repo = new AuthRepository();
 const service = new AuthService(repo);
@@ -21,7 +22,9 @@ authRouter.get("/me", authMiddleware, controller.me);
 
 authRouter.get("/preferences", authMiddleware, async (req: Request, res: Response): Promise<void> => {
   const user = await User.findOne({ email: req.user!.email }).select("cropPreferences").lean();
-  res.json({ cropPreferences: user?.cropPreferences ?? [] });
+  const allowed = new Set([...SELECTED_CROPS]);
+  const filtered = (user?.cropPreferences ?? []).filter((c) => allowed.has(c as (typeof SELECTED_CROPS)[number]));
+  res.json({ cropPreferences: filtered });
 });
 
 authRouter.put("/preferences", authMiddleware, async (req: Request, res: Response): Promise<void> => {
@@ -30,11 +33,13 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
     res.status(400).json({ message: "cropPreferences must be a string array" });
     return;
   }
-  await User.findOneAndUpdate({ email: req.user!.email }, { cropPreferences });
-  res.json({ ok: true, cropPreferences });
+  const allowed = new Set([...SELECTED_CROPS]);
+  const filtered = (cropPreferences as string[]).filter((c) => allowed.has(c as (typeof SELECTED_CROPS)[number]));
+  await User.findOneAndUpdate({ email: req.user!.email }, { cropPreferences: filtered });
+  res.json({ ok: true, cropPreferences: filtered });
 
-  if ((cropPreferences as string[]).length > 0) {
-    const crops = cropPreferences as string[];
+  if (filtered.length > 0) {
+    const crops = filtered;
     void (async () => {
       try {
         const today = new Date();
@@ -52,18 +57,54 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
         }
 
         const userRole = req.user!.role as "buyer" | "farmer";
-        const forecastHorizon = userRole === "buyer" ? "7d" : "30d";
 
-        const forecastRows = await Prediction.find(
-          { item_name: { $in: crops }, horizon: forecastHorizon, algorithm: "random_forest" },
-          { item_name: 1, predicted_price: 1, target_date: 1, date: 1 }
-        ).sort({ date: -1, target_date: 1 }).lean();
+        // Email should include both 7-day and 30-day forecast averages.
+        // Use the latest random_forest batch per horizon to avoid mixing batches.
+        const [latestBatch7, latestBatch30] = await Promise.all([
+          Prediction.findOne({ horizon: "7d", algorithm: "random_forest" })
+            .sort({ createdAt: -1 })
+            .select("forecast_batch_id")
+            .lean(),
+          Prediction.findOne({ horizon: "30d", algorithm: "random_forest" })
+            .sort({ createdAt: -1 })
+            .select("forecast_batch_id")
+            .lean(),
+        ]);
 
-        const forecastPrices: Record<string, number[]> = {};
-        for (const row of forecastRows) {
-          if (!forecastPrices[row.item_name]) forecastPrices[row.item_name] = [];
-          if (forecastPrices[row.item_name].length < 7) {
-            forecastPrices[row.item_name].push(row.predicted_price);
+        const forecastPrices7d: Record<string, number[]> = {};
+        const forecastPrices30d: Record<string, number[]> = {};
+
+        if (latestBatch7?.forecast_batch_id) {
+          const forecastRows7 = await Prediction.find(
+            {
+              item_name: { $in: crops },
+              horizon: "7d",
+              algorithm: "random_forest",
+              forecast_batch_id: latestBatch7.forecast_batch_id,
+            },
+            { item_name: 1, predicted_price: 1 }
+          ).sort({ target_date: 1 }).lean();
+
+          for (const row of forecastRows7) {
+            if (!forecastPrices7d[row.item_name]) forecastPrices7d[row.item_name] = [];
+            if (forecastPrices7d[row.item_name].length < 7) forecastPrices7d[row.item_name].push(row.predicted_price);
+          }
+        }
+
+        if (latestBatch30?.forecast_batch_id) {
+          const forecastRows30 = await Prediction.find(
+            {
+              item_name: { $in: crops },
+              horizon: "30d",
+              algorithm: "random_forest",
+              forecast_batch_id: latestBatch30.forecast_batch_id,
+            },
+            { item_name: 1, predicted_price: 1 }
+          ).sort({ target_date: 1 }).lean();
+
+          for (const row of forecastRows30) {
+            if (!forecastPrices30d[row.item_name]) forecastPrices30d[row.item_name] = [];
+            if (forecastPrices30d[row.item_name].length < 30) forecastPrices30d[row.item_name].push(row.predicted_price);
           }
         }
 
@@ -72,7 +113,8 @@ authRouter.put("/preferences", authMiddleware, async (req: Request, res: Respons
           crops,
           role: userRole,
           todayPrices,
-          forecastPrices,
+          forecastPrices7d,
+          forecastPrices30d,
         });
       } catch (err) {
         console.error("[Email] Welcome email failed:", err instanceof Error ? err.message : err);

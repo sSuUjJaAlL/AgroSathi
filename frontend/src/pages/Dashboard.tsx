@@ -113,21 +113,29 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!item) return;
+    const ac = new AbortController();
+    let cancelled = false;
     setErr(null);
     setLoading(true);
     void Promise.all([
-      fetchDashboard(item),
-      fetchSevenDay(item).catch(() => null),
+      fetchDashboard(item, ac.signal),
+      fetchSevenDay(item, ac.signal).catch(() => null),
     ])
       .then(([d, seven]) => {
+        if (cancelled) return;
         setDash(d as DashboardPayload);
         setF7(seven as ForecastPayload | null);
         setLoading(false);
       })
       .catch((e: Error) => {
+        if (cancelled || e.name === "AbortError") return;
         setErr(e.message);
         setLoading(false);
       });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
   }, [item, pipeUi.refreshTick]);
 
   const chart7 = useMemo(

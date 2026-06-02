@@ -17,7 +17,6 @@ import {
 import {
   fetchDashboard,
   fetchFeaturedCrops,
-  fetchMultiAlgoForecast,
   fetchSevenDay,
   fetchThirtyDay,
   type DashboardPayload,
@@ -37,12 +36,6 @@ function fmtDay(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-type MultiAlgo = {
-  random_forest: Array<{ target_date: string | null; predicted_price: number }>;
-  moving_average: Array<{ target_date: string | null; predicted_price: number }>;
-  lstm: Array<{ target_date: string | null; predicted_price: number }>;
-} | null;
-
 function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
     <div className="cp-section-head">
@@ -61,7 +54,7 @@ export default function ChartsPage() {
   const [dash, setDash] = useState<DashboardPayload | null>(null);
   const [f7, setF7] = useState<ForecastPayload | null>(null);
   const [f30, setF30] = useState<ForecastPayload | null>(null);
-  const [multiAlgo, setMultiAlgo] = useState<MultiAlgo>(null);
+  const [historyWindow, setHistoryWindow] = useState<7 | 30>(30);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -83,23 +76,32 @@ export default function ChartsPage() {
 
   useEffect(() => {
     if (!item) return;
+    const ac = new AbortController();
+    let cancelled = false;
     setSearchParams({ item }, { replace: true });
     setLoading(true);
     setErr(null);
     void Promise.all([
-      fetchDashboard(item),
-      fetchSevenDay(item).catch(() => null),
-      fetchThirtyDay(item).catch(() => null),
-      fetchMultiAlgoForecast(item, "7d").catch(() => null),
+      fetchDashboard(item, ac.signal),
+      fetchSevenDay(item, ac.signal).catch(() => null),
+      fetchThirtyDay(item, ac.signal).catch(() => null),
     ])
-      .then(([d, seven, thirty, multi]) => {
+      .then(([d, seven, thirty]) => {
+        if (cancelled) return;
         setDash(d as DashboardPayload);
         setF7(seven as ForecastPayload | null);
         setF30(thirty as ForecastPayload | null);
-        if (multi) setMultiAlgo(multi as MultiAlgo);
         setLoading(false);
       })
-      .catch((e: Error) => { setErr(e.message); setLoading(false); });
+      .catch((e: Error) => {
+        if (cancelled || e.name === "AbortError") return;
+        setErr(e.message);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
   }, [item]);
 
   const chart7 = useMemo(
@@ -107,37 +109,31 @@ export default function ChartsPage() {
     [f7]
   );
 
-  const hist30 = useMemo(
-    () => (dash?.historical_30d ?? []).map((r) => ({ label: fmtDay(r.date), price: r.avg_price })),
-    [dash?.historical_30d]
-  );
+  const hist30 = useMemo(() => (dash?.historical_30d ?? []), [dash?.historical_30d]);
 
   const chart30 = useMemo(
     () => (f30?.points ?? []).map((p) => ({ day: p.target_date ? fmtDay(p.target_date) : "", price: p.predicted_price })),
     [f30]
   );
 
-  const multiAlgoChart = useMemo(() => {
-    if (!multiAlgo) return [];
-    const len = Math.max(multiAlgo.random_forest.length, multiAlgo.moving_average.length, multiAlgo.lstm.length);
-    return Array.from({ length: len }, (_, i) => {
-      const rfPt = multiAlgo.random_forest[i];
-      const day = rfPt?.target_date ? fmtDay(rfPt.target_date) : multiAlgo.lstm[i]?.target_date ? fmtDay(multiAlgo.lstm[i].target_date!) : `D${i + 1}`;
-      return { day, rf: multiAlgo.random_forest[i]?.predicted_price ?? null, ma: multiAlgo.moving_average[i]?.predicted_price ?? null, lstm: multiAlgo.lstm[i]?.predicted_price ?? null };
+  const historyBars = useMemo(() => {
+    const history = hist30.slice(-historyWindow);
+    if (!history.length) return [];
+    return history.map((row, idx) => {
+      const prev = idx > 0 ? history[idx - 1].avg_price : row.avg_price;
+      const changed = row.avg_price - prev;
+      return {
+        label: fmtDay(row.date),
+        price: row.avg_price,
+        // Red when price decreased, green when increased.
+        fill: changed < 0 ? "#dc2626" : changed > 0 ? "#16a34a" : "#94a3b8",
+        movement: changed < 0 ? "Decreased" : changed > 0 ? "Increased" : "No change",
+      };
     });
-  }, [multiAlgo]);
+  }, [hist30, historyWindow]);
 
-  const farmerBars = useMemo(() => {
-    const h = dash?.historical_30d ?? [];
-    if (!h.length) return [];
-    const prices = h.map((x) => x.avg_price);
-    const sorted = [...prices].sort((a, b) => a - b);
-    const mid = sorted[Math.floor(sorted.length / 2)] ?? 0;
-    return h.map((row) => ({ label: fmtDay(row.date), price: row.avg_price, fill: row.avg_price >= mid ? "#e57373" : "#2D6A4F" }));
-  }, [dash?.historical_30d]);
-
-  const weather14 = dash?.weather_14d ?? [];
-  const fuel14 = dash?.fuel_14d ?? [];
+  const weather14 = useMemo(() => dash?.weather_14d ?? [], [dash?.weather_14d]);
+  const fuel14 = useMemo(() => dash?.fuel_14d ?? [], [dash?.fuel_14d]);
 
   const weatherChartData = useMemo(
     () => weather14.map((w) => ({ day: fmtDay(w.date), temp: w.temperature, rain: w.rainfall, humid: w.humidity })),
@@ -224,7 +220,10 @@ export default function ChartsPage() {
               <p className="muted-agro cp-empty">No historical data available.</p>
             ) : (
               <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={hist30} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <LineChart
+                  data={hist30.map((r) => ({ label: fmtDay(r.date), price: r.avg_price }))}
+                  margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
+                >
                   <CartesianGrid stroke="#e5e7eb" strokeDasharray="4 4" />
                   <XAxis dataKey="label" tick={{ fill: "#6b7280", fontSize: 10 }} interval={Math.ceil(hist30.length / 10)} />
                   <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} domain={["auto", "auto"]} label={{ value: "NPR/KG", angle: -90, position: "insideLeft", fill: "#6b7280", fontSize: 11 }} />
@@ -236,21 +235,43 @@ export default function ChartsPage() {
           )}
         </div>
 
-        {/* ── SECTION 2: DAILY PRICES VS BASELINE (farmer) or 3-ALGO (buyer) ── */}
-        {viewRole === "farmer" && farmerBars.length > 0 && (
+        {/* ── SECTION 2: CROP PRICE HISTORY BARS (7/30 days) ── */}
+        {historyBars.length > 0 && (
           <div className="agro-card cp-card">
             <SectionHeader
-              label={`Daily Prices vs Median — ${item}`}
-              sub="Red = at or above median price · Green = below median (supply pressure)"
+              label={`Crop Price History Bar Chart — ${item}`}
+              sub="Choose 7 or 30 days. Red = price decreased vs previous day, green = increased."
             />
+            <div className="reports-filter-group" style={{ marginBottom: "0.75rem" }}>
+              <button
+                type="button"
+                className={`reports-filter-btn ${historyWindow === 7 ? "active" : ""}`}
+                onClick={() => setHistoryWindow(7)}
+              >
+                Last 7 Days
+              </button>
+              <button
+                type="button"
+                className={`reports-filter-btn ${historyWindow === 30 ? "active" : ""}`}
+                onClick={() => setHistoryWindow(30)}
+              >
+                Last 30 Days
+              </button>
+            </div>
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={farmerBars} margin={{ top: 8, right: 16, left: 4, bottom: 4 }} barCategoryGap="12%">
+              <BarChart data={historyBars} margin={{ top: 8, right: 16, left: 4, bottom: 4 }} barCategoryGap="12%">
                 <CartesianGrid stroke="#e5e7eb" strokeDasharray="4 4" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#6b7280", fontSize: 10 }} interval={2} />
+                <XAxis dataKey="label" tick={{ fill: "#6b7280", fontSize: 10 }} interval={historyWindow === 7 ? 0 : 2} />
                 <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} domain={["auto", "auto"]} />
-                <Tooltip contentStyle={TT} formatter={(v: number) => [`Rs. ${v.toFixed(2)}`, "Avg"]} />
+                <Tooltip
+                  contentStyle={TT}
+                  formatter={(v: number, _n: string, payload: { payload?: { movement?: string } }) => [
+                    `Rs. ${v.toFixed(2)}${payload?.payload?.movement ? ` (${payload.payload.movement})` : ""}`,
+                    "Avg",
+                  ]}
+                />
                 <Bar dataKey="price" radius={[3, 3, 0, 0]}>
-                  {farmerBars.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                  {historyBars.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -313,7 +334,7 @@ export default function ChartsPage() {
         {weatherChartData.length > 0 && (
           <div className="agro-card cp-card">
             <SectionHeader
-              label="Weather — Kathmandu (Last 14 Days)"
+              label="Weather — Kathmandu (22 May to 2 June)"
               sub="Temperature, precipitation, and humidity affecting crop prices"
             />
             <div className="cp-weather-row">
@@ -334,7 +355,7 @@ export default function ChartsPage() {
               </div>
               {/* Weather table */}
               <div style={{ flex: 1, overflowX: "auto" }}>
-                <p className="muted-agro" style={{ fontSize: "0.8rem", marginBottom: 6 }}>Daily readings</p>
+                <p className="muted-agro" style={{ fontSize: "0.8rem", marginBottom: 6 }}>Daily readings (all available days)</p>
                 <table className="agro-data-table">
                   <thead>
                     <tr>
@@ -345,7 +366,7 @@ export default function ChartsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {weather14.slice(-7).reverse().map((w, i) => (
+                    {[...weather14].reverse().map((w, i) => (
                       <tr key={i}>
                         <td>{fmtDay(w.date)}</td>
                         <td>{w.temperature.toFixed(1)} °C</td>
@@ -364,7 +385,7 @@ export default function ChartsPage() {
         {fuelChartData.length > 0 && (
           <div className="agro-card cp-card">
             <SectionHeader
-              label="NOC Fuel Prices — Last 14 Days"
+              label="NOC Fuel Prices — 22 May to 2 June"
               sub="Diesel prices directly affect transport costs and crop prices"
             />
             <div className="cp-weather-row">
@@ -382,7 +403,7 @@ export default function ChartsPage() {
                 </ResponsiveContainer>
               </div>
               <div style={{ flex: 1, overflowX: "auto" }}>
-                <p className="muted-agro" style={{ fontSize: "0.8rem", marginBottom: 6 }}>Recent fuel prices</p>
+                <p className="muted-agro" style={{ fontSize: "0.8rem", marginBottom: 6 }}>Daily fuel prices (all available days)</p>
                 <table className="agro-data-table">
                   <thead>
                     <tr>
@@ -392,7 +413,7 @@ export default function ChartsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {fuel14.slice(-7).reverse().map((f, i) => (
+                    {[...fuel14].reverse().map((f, i) => (
                       <tr key={i}>
                         <td>{fmtDay(f.date)}</td>
                         <td>Rs. {f.petrol_price.toFixed(0)}</td>
